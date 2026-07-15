@@ -212,7 +212,9 @@ export default function BookingBoard({ slots, dates, today, initialIdx, loggedIn
             {/* The date is the date-picker trigger (design's calendar affordance). */}
             <button onClick={openPicker} className="datebtn" aria-label={`날짜 선택, 현재 ${day.md} ${day.wd}`} style={{ display: "flex", alignItems: "center", gap: 7, border: "none", background: "none", padding: "4px 8px", borderRadius: "var(--r-sm)", cursor: "pointer" }}>
               <CalendarIcon />
-              <span style={{ textAlign: "left" }}>
+              {/* Centred, not left-aligned: the date is the widest thing here, so centring the
+                  block puts 수요일 on the date's own axis rather than against its left edge. */}
+              <span style={{ textAlign: "center" }}>
                 <span style={{ display: "block", font: `700 var(--text-xl)/1.15 var(--font-sans)`, letterSpacing: "-0.02em", color: "var(--ink)" }}>{day.md}</span>
                 <span style={{ display: "block", font: `500 var(--text-xs)/1.3 var(--font-sans)`, color: "var(--ink-faint)" }}>{day.wd}</span>
               </span>
@@ -461,11 +463,13 @@ function hourTicks() {
   return out;
 }
 
+// Sized to sit against the 24px date rather than look like an afterthought; stroke is
+// scaled down so it stays a hairline at the larger size instead of thickening with it.
 function CalendarIcon() {
   return (
-    <svg width="13" height="14" viewBox="0 0 13 14" fill="none" aria-hidden style={{ flex: "none" }}>
-      <rect x="0.75" y="2.75" width="11.5" height="10.5" rx="2" stroke="var(--ink-faint)" strokeWidth="1.5" />
-      <path d="M3.5 0.75v3M9.5 0.75v3M0.75 6.25h11.5" stroke="var(--ink-faint)" strokeWidth="1.5" strokeLinecap="round" />
+    <svg width="17" height="18" viewBox="0 0 13 14" fill="none" aria-hidden style={{ flex: "none" }}>
+      <rect x="0.75" y="2.75" width="11.5" height="10.5" rx="2" stroke="var(--ink-faint)" strokeWidth="1.2" />
+      <path d="M3.5 0.75v3M9.5 0.75v3M0.75 6.25h11.5" stroke="var(--ink-faint)" strokeWidth="1.2" strokeLinecap="round" />
     </svg>
   );
 }
