@@ -123,6 +123,16 @@ input[type="time"] {
   min-width: 0;
 }
 
+/* Chrome keeps painting its own clock even with appearance:none, which put two clocks in the field
+   beside each other — its filled black one and our hairline. Ours stays because it's the only one
+   iOS would ever show; the platform's goes, so every member sees the same field. Tapping still
+   opens the picker on the phones this is built for, and desktop can still type into it.
+   !important is load-bearing: without it Chrome keeps the indicator visible (a plain `display:none`
+   here did nothing, while an injected !important rule took effect immediately). */
+input[type="time"]::-webkit-calendar-picker-indicator {
+  display: none !important;
+}
+
 /* Visible, consistent keyboard focus everywhere. */
 :focus-visible {
   outline: 2px solid var(--accent);

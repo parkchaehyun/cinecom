@@ -806,8 +806,26 @@ function TimeField({ id, label, value, onChange }: { id: string; label: string; 
       <label htmlFor={id} style={{ display: "block", font: `600 var(--text-xs) var(--font-sans)`, color: "var(--ink-muted)", marginBottom: 4 }}>
         {label}
       </label>
-      <input id={id} type="time" value={value} onChange={(e) => onChange(e.target.value)} style={{ width: "100%", minWidth: 0, boxSizing: "border-box", padding: "10px", borderRadius: "var(--r-sm)", border: "1px solid var(--line)", background: "var(--sunken)", font: `600 var(--text-base) var(--font-sans)`, color: "var(--ink)" }} />
+      {/* Dropping the native appearance to fix the iOS overlap also dropped its clock indicator,
+          leaving a field that looks like printed text and says nothing about being tappable. So we
+          draw it: ours renders identically everywhere, instead of a clock on Chrome and nothing on
+          iOS. pointer-events:none so the glyph can never swallow the tap it's advertising, and the
+          input reserves room for it rather than sliding its value underneath. */}
+      <span style={{ position: "relative", display: "block" }}>
+        <input id={id} type="time" value={value} onChange={(e) => onChange(e.target.value)} style={{ width: "100%", minWidth: 0, boxSizing: "border-box", padding: "10px 30px 10px 10px", borderRadius: "var(--r-sm)", border: "1px solid var(--line)", background: "var(--sunken)", font: `600 var(--text-base) var(--font-sans)`, color: "var(--ink)" }} />
+        <ClockIcon />
+      </span>
     </div>
+  );
+}
+
+/** The "this opens a picker" affordance. Matches CalendarIcon's hairline weight and ink. */
+function ClockIcon() {
+  return (
+    <svg width="15" height="15" viewBox="0 0 14 14" fill="none" aria-hidden style={{ position: "absolute", right: 9, top: "50%", transform: "translateY(-50%)", pointerEvents: "none" }}>
+      <circle cx="7" cy="7" r="5.6" stroke="var(--ink-faint)" strokeWidth="1.2" />
+      <path d="M7 4.1V7l2 1.5" stroke="var(--ink-faint)" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
   );
 }
 
