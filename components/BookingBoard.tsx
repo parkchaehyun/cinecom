@@ -72,6 +72,9 @@ export default function BookingBoard({ slots, dates, today, initialIdx, loggedIn
   const [sheet, setSheet] = useState<Sheet | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Logged in, but the token has no 카페 permission — recoverable by re-consenting, so the CTA
+  // becomes that instead of a submit that we know will fail again.
+  const [needsConsent, setNeedsConsent] = useState(false);
   // Drag-to-dismiss: the grab handle promises it, so it has to work.
   const [dragY, setDragY] = useState(0);
   const [dragging, setDragging] = useState(false);
@@ -192,6 +195,10 @@ export default function BookingBoard({ slots, dates, today, initialIdx, loggedIn
     // so the next sheet can't mount already translated away. Opening is the one path in, so this
     // holds however the last one closed.
     setDragY(0);
+    // Errors belong to an attempt, not to the member — a conflict from the last booking has no
+    // business greeting them on a fresh one. `needsConsent` deliberately survives: it's a fact
+    // about their Naver grant, still true on the next sheet, and the CTA says so itself.
+    setError(null);
     setSheet({ room, day, startMin: start, endMin: Math.min(start + DEFAULT_DUR, gapEnd), maxEnd: gapEnd, movie: "" });
   }
 
@@ -231,8 +238,21 @@ export default function BookingBoard({ slots, dates, today, initialIdx, loggedIn
   const preview = (s: Sheet) =>
     `${s.day.md} ${s.day.wd} / ${s.room} / ${fmt(s.startMin)} - ${fmt(s.endMin)} / ${s.movie || "미정"}`;
 
+  /**
+   * Re-run Naver consent so the member can tick 카페, which they declined at login.
+   *
+   * auth_type=reprompt asks Naver to show the consent screen again rather than silently reusing
+   * the existing grant — without it, Naver can hand back the same scope-less token and the member
+   * loops forever on the same error with no way out. If Naver ignores the parameter this still
+   * degrades to an ordinary re-login, which is no worse than where they already are.
+   */
+  function reconsent() {
+    signIn("naver", { callbackUrl: window.location.href }, { auth_type: "reprompt" });
+  }
+
   async function submit() {
     if (!sheet || busy) return;
+    if (needsConsent) return reconsent();
     setBusy(true);
     setError(null);
     try {
@@ -252,8 +272,9 @@ export default function BookingBoard({ slots, dates, today, initialIdx, loggedIn
         await signIn("naver", { callbackUrl: window.location.href });
         return;
       }
-      const data = (await res.json().catch(() => ({}))) as { error?: string };
+      const data = (await res.json().catch(() => ({}))) as { error?: string; needsCafeConsent?: boolean };
       if (!res.ok) {
+        setNeedsConsent(!!data.needsCafeConsent);
         setError(data.error ?? "예약글 작성에 실패했습니다.");
         return;
       }
@@ -474,10 +495,17 @@ export default function BookingBoard({ slots, dates, today, initialIdx, loggedIn
               {/* Logged out, this IS the login button, so it wears Naver's green and mark: it's the
                   one place the member hands credentials to Naver, and it's the screen 네아로 검수
                   will be looking at. Logged in, login is over and it returns to our own accent. */}
-              <button onClick={submit} disabled={busy} className={loggedIn ? "primary" : "naverbtn"} style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 7, width: "100%", padding: 14, borderRadius: "var(--r-md)", border: "none", background: loggedIn ? "var(--accent-ink)" : "var(--naver)", color: "var(--on-accent)", font: `700 var(--text-sm) var(--font-sans)`, cursor: busy ? "default" : "pointer", opacity: busy ? 0.7 : 1 }}>
-                {!busy && !loggedIn && <NaverMark size={13} />}
-                {busy ? "작성 중…" : loggedIn ? "예약글 작성" : "네이버 아이디로 로그인"}
-              </button>
+              {(() => {
+                // Three states, one button: log in · re-consent to 카페 · post. The first two both
+                // hand off to Naver, so they wear Naver's green; only the last is our own action.
+                const toNaver = !loggedIn || needsConsent;
+                return (
+                  <button onClick={submit} disabled={busy} className={toNaver ? "naverbtn" : "primary"} style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 7, width: "100%", padding: 14, borderRadius: "var(--r-md)", border: "none", background: toNaver ? "var(--naver)" : "var(--accent-ink)", color: "var(--on-accent)", font: `700 var(--text-sm) var(--font-sans)`, cursor: busy ? "default" : "pointer", opacity: busy ? 0.7 : 1 }}>
+                    {!busy && toNaver && <NaverMark size={13} />}
+                    {busy ? "작성 중…" : needsConsent ? "'카페' 동의하고 다시 시도" : loggedIn ? "예약글 작성" : "네이버 아이디로 로그인"}
+                  </button>
+                );
+              })()}
             </div>
           </div>
         </>

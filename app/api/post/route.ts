@@ -4,7 +4,7 @@ import { getSlots } from "@/lib/slots";
 import { findClash } from "@/lib/occupancy";
 import { addDays } from "@/lib/dates";
 import { buildTitle } from "@/lib/title";
-import { DEFAULT_MENU_ID, postArticle } from "@/lib/naver";
+import { CafeScopeError, DEFAULT_MENU_ID, postArticle } from "@/lib/naver";
 import { runIngest } from "@/lib/ingest";
 import { ROOMS } from "@/lib/types";
 
@@ -69,7 +69,23 @@ export async function POST(req: Request) {
       menuId: b.menuId ?? DEFAULT_MENU_ID,
     });
   } catch (e) {
-    return NextResponse.json({ error: (e as Error).message }, { status: 502 });
+    // Declined 카페 permission at login — recoverable, and the client knows how: re-consent.
+    if (e instanceof CafeScopeError) {
+      return NextResponse.json(
+        {
+          error: "네이버 로그인할 때 '카페' 항목에 동의해야 예약글을 작성할 수 있어요.",
+          needsCafeConsent: true,
+        },
+        { status: 403 },
+      );
+    }
+    // Anything else: log the detail, show the member a sentence. This used to return
+    // (e as Error).message, which put `cafe write HTTP 401: {"errorMessage":...}` on screen.
+    console.error("cafe write failed:", e);
+    return NextResponse.json(
+      { error: "예약글 작성에 실패했습니다. 잠시 후 다시 시도해 주세요." },
+      { status: 502 },
+    );
   }
 
   // The board reads the DB, not the cafe, so without this the member's own booking

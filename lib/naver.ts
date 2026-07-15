@@ -108,6 +108,28 @@ export async function postArticle({
     cache: "no-store",
   });
   const json: unknown = await res.json().catch(() => null);
-  if (!res.ok) throw new Error(`cafe write HTTP ${res.status}: ${JSON.stringify(json)}`);
+  if (!res.ok) {
+    // 024 = "Scope Status Invalid". The token is fine; it just doesn't carry 카페 permission,
+    // because Naver lists 카페 as a 선택 consent and the member declined it at login. Distinct
+    // from an expired token, and recoverable — see CafeScopeError.
+    const code = (json as { errorCode?: string } | null)?.errorCode;
+    if (res.status === 401 && code === "024") throw new CafeScopeError();
+    throw new Error(`cafe write HTTP ${res.status}: ${JSON.stringify(json)}`);
+  }
   return json;
+}
+
+/**
+ * The member is logged in, but their token lacks 카페 permission.
+ *
+ * Naver marks 카페 as a 선택 item on the consent screen, so it can be declined while login still
+ * succeeds — and nothing about the token or the login response says so. Naver's token response
+ * carries no `scope` field, so this cannot be detected at login; the first symptom is the write
+ * failing. Recoverable: send them back through consent with auth_type=reprompt.
+ */
+export class CafeScopeError extends Error {
+  constructor() {
+    super("cafe scope not granted");
+    this.name = "CafeScopeError";
+  }
 }
