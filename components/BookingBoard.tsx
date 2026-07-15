@@ -24,6 +24,15 @@ const SNAP = 30; // tap-to-place granularity — 81% of real bookings already st
 // Durations members actually book: these four cover 91% of 231 real bookings (2h alone is 46%).
 // The native time picker still handles the other 9%.
 const DURATIONS = [90, 120, 150, 180];
+/**
+ * How far past midnight a booking may run when the day's last gap reaches midnight.
+ *
+ * The club screens overnight for real — 22:30–25:30 is in the corpus, and 01:00–04:00 marathons
+ * happen — so a gap that ends at midnight isn't really the end of the night. When the next day's
+ * first booking doesn't cap it sooner, 06:00 does: that's past every overnight booking in two
+ * years of the cafe, and stops the picker offering to book a room until lunchtime tomorrow.
+ */
+const OVERNIGHT_CAP = 6 * 60;
 const WEEK_TICKS = [360, 720, 1080, 1440]; // 6 / 12 / 18 / 24 — enough to read "is the evening free?"
 
 const pad = (n: number) => String(n).padStart(2, "0");
@@ -42,6 +51,19 @@ const y = (min: number) => (min - DAY_START) * PXPM + PAD_TOP;
 const pct = (min: number) => ((min - DAY_START) / SPAN) * 100;
 
 type Item = { kind: "free"; startMin: number; endMin: number } | { kind: "block"; block: DayBlock };
+
+/**
+ * The latest a booking starting in this day's final gap may run to, in minutes from THIS day's
+ * midnight — so 25:00 means 01:00 tomorrow, exactly as the club writes it.
+ *
+ * Only the last gap gets this: if anything is booked later today, the gap ends there and midnight
+ * was never the boundary anyway.
+ */
+function overnightLimit(date: string, room: string, slots: UISlot[]): number {
+  const next = dayBlocks(addDays(date, 1), room, slots);
+  const first = next.length ? Math.min(...next.map((b) => b.from)) : OVERNIGHT_CAP;
+  return DAY_END + Math.min(first, OVERNIGHT_CAP);
+}
 
 function buildItems(blocks: DayBlock[]): Item[] {
   const items: Item[] = [];
@@ -199,7 +221,9 @@ export default function BookingBoard({ slots, dates, today, initialIdx, loggedIn
     // business greeting them on a fresh one. `needsConsent` deliberately survives: it's a fact
     // about their Naver grant, still true on the next sheet, and the CTA says so itself.
     setError(null);
-    setSheet({ room, day, startMin: start, endMin: Math.min(start + DEFAULT_DUR, gapEnd), maxEnd: gapEnd, movie: "" });
+    // A gap running to midnight isn't the end of the night — the club books straight through it.
+    const maxEnd = gapEnd === DAY_END ? overnightLimit(day.date, room, local) : gapEnd;
+    setSheet({ room, day, startMin: start, endMin: Math.min(start + DEFAULT_DUR, maxEnd), maxEnd, movie: "" });
   }
 
   /* Swipe-down-to-dismiss. Pointer events so mouse and touch share one path; the drag zone
@@ -233,6 +257,19 @@ export default function BookingBoard({ slots, dates, today, initialIdx, loggedIn
     const startMin = parseTime(v);
     const dur = sheet.endMin - sheet.startMin;
     setSheet({ ...sheet, startMin, endMin: Math.min(startMin + dur, sheet.maxEnd) });
+  }
+
+  /**
+   * An end at or before the start can only mean tomorrow, so read it that way rather than as a
+   * booking that finishes before it begins. 23:00 → 01:00 becomes 23:00–25:00: two hours, written
+   * the way the club writes it. Previously the picker's 01:00 came through as minute 60, the
+   * duration went negative, and `Math.max(0, …)` displayed it as 0분 — the app quietly disagreeing
+   * with the member about what they'd just asked for.
+   */
+  function setEnd(v: string) {
+    if (!sheet) return;
+    const t = parseTime(v);
+    setSheet({ ...sheet, endMin: t <= sheet.startMin ? t + 1440 : t });
   }
 
   const preview = (s: Sheet) =>
@@ -470,7 +507,11 @@ export default function BookingBoard({ slots, dates, today, initialIdx, loggedIn
                   painting over each other. Wrapping is ugly; overlapping is broken. */}
               <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 10 }}>
                 <TimeField id="start" label="시작" value={fmt(sheet.startMin)} onChange={setStart} />
-                <TimeField id="end" label="종료" value={fmt(Math.min(sheet.endMin, 1439))} onChange={(v) => setSheet({ ...sheet, endMin: parseTime(v) })} />
+                {/* The picker speaks clock time (01:00); everything else speaks the club's (25:00).
+                    `% 1440` maps 25:00 back onto the dial the OS can actually show — it used to
+                    clamp to 23:59, which silently rewrote an overnight booking into a 59-minute one.
+                    The label says 익일 so the field can't be misread as one in the morning today. */}
+                <TimeField id="end" label={sheet.endMin > DAY_END ? "종료 · 익일" : "종료"} value={fmt(sheet.endMin % 1440)} onChange={setEnd} />
               </div>
 
               {/* Duration is derived from the times, and the chips write back to the end —
