@@ -1,5 +1,6 @@
 // Read client for the 씨네꼼 Naver cafe (public, unofficial boardlist endpoint).
 // Verified: no auth/rate-limit; `type` is on the OUTER list object, not `item`.
+import iconv from "iconv-lite";
 import type { RawPost } from "./types";
 
 export const CLUB_ID = 26859626;
@@ -59,6 +60,21 @@ export async function fetchBoardPage(
  */
 const sanitize = (s: string) => s.replace(/"/g, "'");
 
+/**
+ * Percent-encode as CP949 (MS949) — the charset the cafe write API actually reads the
+ * body in. Space is `+` per application/x-www-form-urlencoded. Node has no native CP949
+ * encoder, hence iconv-lite.
+ */
+export function cp949FormEncode(value: string): string {
+  let out = "";
+  for (const b of iconv.encode(sanitize(value), "cp949")) {
+    if (b === 0x20) out += "+";
+    else if (/[A-Za-z0-9\-_.~]/.test(String.fromCharCode(b))) out += String.fromCharCode(b);
+    else out += "%" + b.toString(16).toUpperCase().padStart(2, "0");
+  }
+  return out;
+}
+
 export interface PostArticleInput {
   accessToken: string;
   subject: string;
@@ -70,14 +86,15 @@ export interface PostArticleInput {
 /**
  * Create a cafe post as the token's owner. Returns Naver's raw response.
  *
- * Encoding, the hard way (two real posts to get here):
- * - UTF-8 body + `charset=utf-8` → stored `미정` as `誘몄젙`.
- * - CP949 body + `charset=MS949` → stored it as `占쏙옙`, which decodes as our CP949
- *   bytes read as UTF-8 — proving Naver decodes the body as **UTF-8**.
+ * Encoding — established by three real posts, read back from the cafe:
  *
- * So the body is plain UTF-8 percent-encoding (what URLSearchParams emits, and what
- * Python's urlencode emits in the community's working sample) and the Content-Type
- * carries **no charset parameter** — declaring one is what corrupted the first attempt.
+ *   body   charset hdr   stored `미정`   ⇒ Naver read our bytes as
+ *   UTF-8  utf-8         誘몄젙          CP949
+ *   UTF-8  (none)        誘몄젙          CP949
+ *   CP949  MS949         占쏙옙          UTF-8   ← declaring MS949 flips it to UTF-8
+ *
+ * So Naver reads the body as **CP949** unless a charset param talks it out of that.
+ * Hence: CP949-encoded body, and **no charset parameter**.
  */
 export async function postArticle({
   accessToken,
@@ -86,17 +103,20 @@ export async function postArticle({
   menuId = DEFAULT_MENU_ID,
   openToAll = true,
 }: PostArticleInput): Promise<unknown> {
+  // Hand-built: URLSearchParams always emits UTF-8, which Naver would misread as CP949.
+  const body = [
+    `subject=${cp949FormEncode(subject)}`,
+    `content=${cp949FormEncode(content)}`,
+    `openyn=${openToAll}`,
+  ].join("&");
+
   const res = await fetch(`${WRITE_BASE}/${CLUB_ID}/menu/${menuId}/articles`, {
     method: "POST",
     headers: {
       Authorization: `Bearer ${accessToken}`,
-      "Content-Type": "application/x-www-form-urlencoded", // no charset — see above
+      "Content-Type": "application/x-www-form-urlencoded", // no charset — declaring one flips Naver to UTF-8
     },
-    body: new URLSearchParams({
-      subject: sanitize(subject),
-      content: sanitize(content),
-      openyn: String(openToAll),
-    }),
+    body,
     cache: "no-store",
   });
   const json: unknown = await res.json().catch(() => null);
