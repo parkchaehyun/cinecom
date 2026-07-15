@@ -24,6 +24,9 @@ interface Body {
 
 const bad = (msg: string, status = 400) => NextResponse.json({ error: msg }, { status });
 
+/** Minutes-from-midnight → HH:MM, keeping the club's overnight convention (25:30, not 01:30). */
+const hhmm = (m: number) => `${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`;
+
 export async function POST(req: Request) {
   const session = await auth();
   if (!session?.accessToken) return bad("네이버 로그인이 필요합니다.", 401);
@@ -37,6 +40,20 @@ export async function POST(req: Request) {
   if (typeof startMin !== "number" || typeof endMin !== "number") return bad("시간이 올바르지 않습니다.");
   if (endMin <= startMin) return bad("종료 시간이 시작 시간보다 빨라요.");
 
+  // Pull the newest posts from the CAFE before judging. getSlots reads our own DB, which is only
+  // ever as fresh as the last cron — so a booking posted straight to the cafe two minutes ago is
+  // invisible to it, and a "re-check" against it would approve the double booking it exists to
+  // prevent. Tightening the cron shrinks that window but never closes it; crawling here does.
+  // Two pages is the right depth precisely because the posts the cron hasn't seen are the newest
+  // ones, and the newest ones are on page 1. reconcile:false — a shallow pass can't tell "deleted"
+  // from "further down the list", and would free every booking it didn't happen to fetch.
+  // Best-effort: if the cafe is slow or down, fall through to the DB rather than block a booking.
+  try {
+    await runIngest({ maxPages: 2, reconcile: false });
+  } catch {
+    /* the check below still runs against the last known state */
+  }
+
   // The cafe is the source of truth and we cannot lock a slot, so re-check as late as
   // possible: someone may have posted between the board loading and this submit.
   // Widen the window by a day either side — the club books overnight (22:30-25:30), so a
@@ -45,14 +62,14 @@ export async function POST(req: Request) {
   const context = await getSlots(addDays(date, -1), addDays(date, 1));
   const clash = findClash(date, room, startMin, endMin, context);
   if (clash) {
+    // Name it. "이미 예약된 시간과 겹칩니다" alone leaves the member guessing which part of their
+    // request is the problem — and since the crawl above means this now fires on bookings the
+    // board hasn't drawn yet, the clash may be one they have genuinely never seen.
+    const s = clash.slot;
     return NextResponse.json(
       {
-        error: "이미 예약된 시간과 겹칩니다.",
-        conflict: {
-          movie: clash.slot.movie,
-          startMin: clash.slot.startMin,
-          endMin: clash.slot.endMin,
-        },
+        error: `이미 예약된 시간과 겹칩니다: ${s.movie ?? "미정"} ${hhmm(s.startMin)}–${s.endAssumed ? "?" : hhmm(s.endMin)}`,
+        conflict: { movie: s.movie, startMin: s.startMin, endMin: s.endMin },
       },
       { status: 409 },
     );

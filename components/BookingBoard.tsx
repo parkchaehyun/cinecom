@@ -283,6 +283,10 @@ export default function BookingBoard({ slots, dates, today, initialIdx, loggedIn
       if (!res.ok) {
         setNeedsConsent(!!data.needsCafeConsent);
         setError(data.error ?? "예약글 작성에 실패했습니다.");
+        // 409 means the server crawled the cafe and found a booking we don't have drawn. Telling
+        // the member "그 시간은 이미 예약됨" while the grid behind them still shows the slot empty
+        // is asking them to disbelieve their own eyes. The server just refreshed the DB, so pull it.
+        if (res.status === 409) router.refresh();
         return;
       }
       setSheet(null);
