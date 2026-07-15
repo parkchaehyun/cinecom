@@ -394,10 +394,15 @@ export default function BookingBoard({ slots, dates, today, initialIdx, loggedIn
           <WeekView dates={weekDates} slots={local} todayDate={today} onPickDate={pickDate} />
         )}
 
-        {/* View switcher */}
-        <div style={{ display: "flex", gap: 8, padding: "12px 16px 14px", flex: "none" }}>
+        {/* View switcher, and the policy link riding along on its row rather than claiming one of
+            its own — 개인정보보호법 제30조 requires the policy be 공개, not prominent, and this
+            screen's whole point is that it fits without scrolling. */}
+        <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "12px 16px 14px", flex: "none" }}>
           <Pill label="오늘" active={view === "day"} onClick={goToday} />
           <Pill label="이번주" active={view === "week"} onClick={() => setView("week")} />
+          <a href="/privacy" className="policy-link" style={{ flex: "none", padding: "0 2px", font: `500 var(--text-xs) var(--font-sans)`, color: "var(--ink-faint)", textDecoration: "none", whiteSpace: "nowrap", lineHeight: "44px" }}>
+            개인정보
+          </a>
         </div>
       </main>
 
@@ -549,6 +554,7 @@ export default function BookingBoard({ slots, dates, today, initialIdx, loggedIn
         .naverbtn { transition: filter var(--dur) var(--ease-out-quart); }
         .naverbtn:hover { filter: brightness(0.93); }
         .authbtn:hover { background: var(--sunken); }
+        .policy-link:hover { color: var(--ink-muted); text-decoration: underline; }
         .weekrow { transition: background var(--dur) var(--ease-out-quart); }
         .weekrow:hover { background: var(--sunken); }
       `}</style>

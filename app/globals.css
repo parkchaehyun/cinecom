@@ -135,6 +135,74 @@ body {
   }
 }
 
+/* 개인정보처리방침 prose. A legal page nobody reads is a legal page that failed — this is the one
+   surface where long-form legibility beats density, so: real line-height, keep-all so Korean wraps
+   on word boundaries rather than mid-word, and generous space between clauses. */
+.policy p,
+.policy li {
+  font: 500 var(--text-sm) / 1.75 var(--font-sans);
+  color: var(--ink-muted);
+  word-break: keep-all;
+  margin: 0 0 8px;
+}
+.policy h3 {
+  font: 700 var(--text-sm) / 1.5 var(--font-sans);
+  color: var(--ink);
+  margin: 14px 0 4px;
+}
+.policy b {
+  color: var(--ink);
+  font-weight: 700;
+}
+.policy ul {
+  margin: 0 0 8px;
+  padding-left: 18px;
+}
+.policy li {
+  margin-bottom: 4px;
+}
+.policy li::marker {
+  color: var(--ink-faint);
+}
+.policy a {
+  color: var(--accent-ink);
+}
+/* Wide content scrolls inside its own box; the page body must never scroll sideways. The scroll
+   lives on the wrapper, not the table, so the table keeps `display: table` and its real semantics
+   (display:block on a table quietly detaches row/column structure from assistive tech). */
+.policy .tablewrap {
+  overflow-x: auto;
+  margin: 8px 0 10px;
+}
+/* max-content, NOT width:100%. With 100% the table's box is pinned to the wrapper and the cells
+   overflow the TABLE instead — so the table became the scroll container, the wrapper never
+   scrolled, and the tabIndex sat on the wrong element (axe: scrollable-region-focusable). Sizing
+   the table to its content puts the overflow back on the wrapper, which is focusable and labelled.
+   min-width keeps it full-bleed when it does fit. */
+.policy table {
+  width: max-content;
+  min-width: 100%;
+  border-collapse: collapse;
+}
+.policy th,
+.policy td {
+  font: 500 var(--text-xs) / 1.6 var(--font-sans);
+  text-align: left;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  /* Wraps rather than nowrap: three columns of Korean fit a 390px phone when allowed to wrap, so
+     the table usually doesn't scroll at all — the best fix for a scroll trap is not needing one. */
+  word-break: keep-all;
+}
+.policy th {
+  font-weight: 700;
+  color: var(--ink);
+  background: var(--sunken);
+}
+.policy td {
+  color: var(--ink-muted);
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
