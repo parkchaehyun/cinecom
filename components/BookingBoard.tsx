@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
+import { signIn } from "next-auth/react";
 import type { DayInfo, UISlot } from "@/lib/types";
 import { addDays, mondayOf } from "@/lib/dates";
 
@@ -53,14 +55,20 @@ interface Sheet {
   person: string;
 }
 
-export default function BookingBoard({ slots, dates, today, initialIdx }: { slots: UISlot[]; dates: DayInfo[]; today: string; initialIdx: number }) {
+export default function BookingBoard({ slots, dates, today, initialIdx, loggedIn }: { slots: UISlot[]; dates: DayInfo[]; today: string; initialIdx: number; loggedIn: boolean }) {
   const [local, setLocal] = useState<UISlot[]>(slots);
   const [dateIdx, setDateIdx] = useState(initialIdx);
   const [view, setView] = useState<"day" | "week">("day");
   const [sheet, setSheet] = useState<Sheet | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const dateInputRef = useRef<HTMLInputElement>(null);
+  const router = useRouter();
   const day = dates[dateIdx];
+
+  // Adopt fresh server data after router.refresh() (e.g. once a new post is ingested).
+  useEffect(() => setLocal(slots), [slots]);
 
   const roomSlots = (date: string, room: string) => local.filter((s) => s.date === date && s.room === room);
 
@@ -121,13 +129,40 @@ export default function BookingBoard({ slots, dates, today, initialIdx }: { slot
     `${s.day.md} ${s.day.wd} / ${s.room} / ${fmt(s.startMin)} - ${fmt(s.endMin)}` +
     `${s.person ? ` / ${s.person}` : ""} / ${s.movie || "미정"}`;
 
-  function submit() {
-    if (!sheet) return;
-    setLocal((prev) => [
-      ...prev,
-      { date: sheet.day.date, room: sheet.room, startMin: sheet.startMin, endMin: sheet.endMin, movie: sheet.movie || null, person: sheet.person || null, status: "booked" },
-    ]);
-    setSheet(null);
+  async function submit() {
+    if (!sheet || busy) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/post", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          date: sheet.day.date,
+          room: sheet.room,
+          startMin: sheet.startMin,
+          endMin: sheet.endMin,
+          movie: sheet.movie,
+          person: sheet.person,
+        }),
+      });
+      if (res.status === 401) {
+        // Not signed in (or the token expired) — send them to Naver, then back here.
+        await signIn("naver", { callbackUrl: window.location.href });
+        return;
+      }
+      const data = (await res.json().catch(() => ({}))) as { error?: string };
+      if (!res.ok) {
+        setError(data.error ?? "예약글 작성에 실패했습니다.");
+        return;
+      }
+      setSheet(null);
+      router.refresh(); // pull the freshly-ingested booking back from the server
+    } catch {
+      setError("네트워크 오류가 발생했습니다.");
+    } finally {
+      setBusy(false);
+    }
   }
 
   const todayIdx = dates.findIndex((d) => d.date === today);
@@ -252,8 +287,13 @@ export default function BookingBoard({ slots, dates, today, initialIdx }: { slot
               <p style={{ font: `500 var(--text-xs)/1.6 var(--font-sans)`, color: "var(--ink-muted)", background: "var(--page)", borderRadius: "var(--r-sm)", padding: "10px 12px", margin: "4px 0 14px", wordBreak: "keep-all" }}>
                 {preview(sheet)}
               </p>
-              <button onClick={submit} className="primary" style={{ width: "100%", padding: 14, borderRadius: "var(--r-md)", border: "none", background: "var(--accent)", color: "#fff", font: `700 var(--text-sm) var(--font-sans)`, cursor: "pointer" }}>
-                네이버로 예약글 작성
+              {error && (
+                <p role="alert" style={{ font: `600 var(--text-xs)/1.5 var(--font-sans)`, color: "var(--review-meta)", background: "var(--review-bg)", border: "1px solid var(--review-border)", borderRadius: "var(--r-sm)", padding: "9px 11px", margin: "0 0 10px" }}>
+                  {error}
+                </p>
+              )}
+              <button onClick={submit} disabled={busy} className="primary" style={{ width: "100%", padding: 14, borderRadius: "var(--r-md)", border: "none", background: "var(--accent)", color: "#fff", font: `700 var(--text-sm) var(--font-sans)`, cursor: busy ? "default" : "pointer", opacity: busy ? 0.7 : 1 }}>
+                {busy ? "작성 중…" : loggedIn ? "예약글 작성" : "네이버로 로그인하고 예약글 작성"}
               </button>
             </div>
           </div>

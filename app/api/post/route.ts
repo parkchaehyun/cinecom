@@ -3,6 +3,7 @@ import { auth } from "@/auth";
 import { getSlots } from "@/lib/slots";
 import { buildTitle } from "@/lib/title";
 import { DEFAULT_MENU_ID, postArticle } from "@/lib/naver";
+import { runIngest } from "@/lib/ingest";
 import { ROOMS } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
@@ -53,14 +54,25 @@ export async function POST(req: Request) {
   const content = b.body?.trim() || "."; // members really do post a bare "."
 
   try {
-    const result = await postArticle({
+    await postArticle({
       accessToken: session.accessToken,
       subject,
       content,
       menuId: b.menuId ?? DEFAULT_MENU_ID,
     });
-    return NextResponse.json({ ok: true, subject, result });
   } catch (e) {
     return NextResponse.json({ error: (e as Error).message }, { status: 502 });
   }
+
+  // The board reads the DB, not the cafe, so without this the member's own booking
+  // wouldn't appear until the next cron. Shallow pass (newest pages, no reconcile).
+  // Never fail the response over this — the post itself already succeeded.
+  let ingested = false;
+  try {
+    await runIngest({ maxPages: 2, reconcile: false });
+    ingested = true;
+  } catch {
+    /* the scheduled ingest will pick it up */
+  }
+  return NextResponse.json({ ok: true, subject, ingested });
 }

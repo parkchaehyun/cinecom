@@ -57,8 +57,19 @@ export interface IngestResult {
   removed: number;
 }
 
-export async function runIngest(): Promise<IngestResult> {
-  const parsed = await crawlAndParse();
+export interface IngestOptions {
+  /** Pages of menu 0 to crawl. The default walks the full horizon. */
+  maxPages?: number;
+  /**
+   * Reconcile deletions (DB posts absent from the crawl → freed). Only valid on a FULL
+   * crawl: on a shallow pass every post outside the first pages looks "missing" and would
+   * be wrongly freed.
+   */
+  reconcile?: boolean;
+}
+
+export async function runIngest({ maxPages = MAX_PAGES, reconcile = true }: IngestOptions = {}): Promise<IngestResult> {
+  const parsed = await crawlAndParse(maxPages);
   const supa = supabaseAdmin();
   const nowIso = new Date().toISOString();
   const ids = parsed.map((p) => p.post.articleId);
@@ -104,16 +115,19 @@ export async function runIngest(): Promise<IngestResult> {
   }
 
   // 3. Reconcile deletions: posts previously seen in-window but absent from this crawl → freed.
-  const cutoffIso = new Date(Date.now() - HORIZON_DAYS * DAY).toISOString();
-  const { data: prior } = await supa
-    .from("posts")
-    .select("article_id")
-    .gte("write_ts", cutoffIso)
-    .is("missing_since", null);
-  const gone = (prior ?? []).map((r) => r.article_id as number).filter((id) => !seenIds.has(id));
-  if (gone.length) {
-    await supa.from("posts").update({ missing_since: nowIso }).in("article_id", gone);
-    await supa.from("slots").delete().in("article_id", gone);
+  let gone: number[] = [];
+  if (reconcile) {
+    const cutoffIso = new Date(Date.now() - HORIZON_DAYS * DAY).toISOString();
+    const { data: prior } = await supa
+      .from("posts")
+      .select("article_id")
+      .gte("write_ts", cutoffIso)
+      .is("missing_since", null);
+    gone = (prior ?? []).map((r) => r.article_id as number).filter((id) => !seenIds.has(id));
+    if (gone.length) {
+      await supa.from("posts").update({ missing_since: nowIso }).in("article_id", gone);
+      await supa.from("slots").delete().in("article_id", gone);
+    }
   }
 
   return {
