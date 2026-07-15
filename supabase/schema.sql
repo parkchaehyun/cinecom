@@ -12,8 +12,7 @@ create table if not exists posts (
   is_reservation boolean    not null default false,
   parse_status  text        not null default 'unparsed', -- unparsed | ok | needs_review | not_reservation
   first_seen    timestamptz not null default now(),
-  last_seen     timestamptz not null default now(),
-  missing_since timestamptz                       -- set when an article disappears from the crawl window (deleted)
+  last_seen     timestamptz not null default now()
 );
 
 -- Parsed showings (one row per showing; a post can yield 0..2).

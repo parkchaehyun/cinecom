@@ -104,7 +104,7 @@ export async function runIngest({ maxPages = MAX_PAGES, reconcile = true }: Inge
   const reservations = parsed.filter((p) => p.isReservation);
   const seenIds = new Set(reservations.map((p) => p.post.articleId));
 
-  // 1. Upsert every crawled RESERVATION (re-marks previously-missing ones as present).
+  // 1. Upsert every crawled RESERVATION.
   const postRows = reservations.map(({ post, isReservation, parseStatus }) => ({
     article_id: post.articleId,
     menu_id: post.menuId,
@@ -115,7 +115,6 @@ export async function runIngest({ maxPages = MAX_PAGES, reconcile = true }: Inge
     is_reservation: isReservation,
     parse_status: parseStatus,
     last_seen: nowIso,
-    missing_since: null,
   }));
   if (postRows.length) {
     const { error } = await supa.from("posts").upsert(postRows, { onConflict: "article_id" });
@@ -143,19 +142,23 @@ export async function runIngest({ maxPages = MAX_PAGES, reconcile = true }: Inge
     if (error) throw new Error(`slots insert: ${error.message}`);
   }
 
-  // 3. Reconcile deletions: posts previously seen in-window but absent from this crawl → freed.
+  // 3. Reconcile deletions: posts previously seen in-window but absent from this crawl.
+  //    Deleted from the cafe → deleted here, now, not in 90 days. A member removing their post is
+  //    them withdrawing it, and our copy loses its only purpose the moment the slot it described
+  //    stops existing; holding their nickname past that is retention no one asked for. This used
+  //    to only stamp `missing_since` and drop the slots, leaving the post row — nickname, title
+  //    and all — sitting for the rest of the retention window. That soft marker bought nothing:
+  //    it existed solely to keep the row out of this very query, which a real delete does better.
+  //    Safe because the cafe is the source of truth, so a post that turns out to be alive is
+  //    simply re-added by the next crawl.
   let gone: number[] = [];
   if (reconcile) {
     const cutoffIso = new Date(Date.now() - HORIZON_DAYS * DAY).toISOString();
-    const { data: prior } = await supa
-      .from("posts")
-      .select("article_id")
-      .gte("write_ts", cutoffIso)
-      .is("missing_since", null);
+    const { data: prior } = await supa.from("posts").select("article_id").gte("write_ts", cutoffIso);
     gone = (prior ?? []).map((r) => r.article_id as number).filter((id) => !seenIds.has(id));
     if (gone.length) {
-      await supa.from("posts").update({ missing_since: nowIso }).in("article_id", gone);
-      await supa.from("slots").delete().in("article_id", gone);
+      const { error } = await supa.from("posts").delete().in("article_id", gone); // slots cascade
+      if (error) throw new Error(`reconcile delete: ${error.message}`);
     }
   }
 
