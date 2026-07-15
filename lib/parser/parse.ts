@@ -125,14 +125,16 @@ function extractRanges(cleaned: string): Range[] {
   }
   if (out.length) return out;
 
-  // No range → a lone time (missing/unknown endpoint): keep but flag for review.
+  // No range → a lone time (`19:00`, `21:40-?`). The start is known, the end genuinely
+  // isn't, so report it as unknown (NaN → stored NULL) rather than inventing one here.
+  // Consumers apply the defensive default; see lib/slots.ts.
   const sm = t.match(SINGLE_RE);
   if (sm) {
     const h = Number(sm[1]);
     const mm = Number(sm[2]);
     if (h <= 30 && mm <= 59) {
       const start = h * 60 + mm;
-      return [{ startMin: start, endMin: start, needsReview: true }];
+      return [{ startMin: start, endMin: NaN, needsReview: true }];
     }
   }
   return [];

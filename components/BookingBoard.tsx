@@ -222,9 +222,11 @@ export default function BookingBoard({ slots, dates, today, initialIdx, loggedIn
             <NavBtn label="다음 날짜" glyph="›" onClick={() => setDateIdx((i) => Math.min(dates.length - 1, i + 1))} disabled={view === "week" || dateIdx === dates.length - 1} />
           </div>
           <div style={{ display: "flex", justifyContent: "center", gap: 14 }}>
+            {/* Only the two states whose blocks carry no text need explaining. A 확인 필요
+                block literally says "확인 필요", so a legend entry for it was permanent chrome
+                teaching nothing — for something that appears about twice a year. */}
             <Legend swatch={<DashSwatch />} text="예약가능" />
             <Legend swatch={<Dot color="var(--accent)" />} text="예약됨" />
-            <Legend swatch={<Dot color="var(--review-border)" />} text="확인 필요" />
           </div>
         </header>
 
@@ -446,7 +448,8 @@ function SlotBlock({ block }: { block: DayBlock }) {
         {/* "예약됨" was redundant — a filled block already means booked — so the line carries
             who booked it instead. Review slots keep the warning: it outranks the name.
             Times are always what the club wrote (22:30–25:30), not the midnight-clipped ones. */}
-        {review ? "확인 필요" : (slot.who ?? "예약됨")} · {fmt(slot.startMin)}–{fmt(slot.endMin)}
+        {review ? "확인 필요" : (slot.who ?? "예약됨")} · {fmt(slot.startMin)}–
+        {slot.endAssumed ? "?" : fmt(slot.endMin)}
       </div>
     </div>
   );

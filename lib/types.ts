@@ -28,6 +28,8 @@ export interface UISlot {
   person: string | null;
   /** Who booked it: the name in the title if given, else the poster's Naver nick. */
   who: string | null;
+  /** The poster gave no end time — endMin is a defensive assumption, not what they wrote. */
+  endAssumed: boolean;
   status: SlotStatus;
 }
 

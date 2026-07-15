@@ -1,7 +1,7 @@
 import { supabaseAdmin } from "./supabase";
 import { ROOMS, type UISlot } from "./types";
 
-interface SlotRow {
+export interface SlotRow {
   room: string;
   date: string;
   start_min: number | null;
@@ -13,6 +13,16 @@ interface SlotRow {
   // client types it as an array without generated types — accept both.
   posts: { writer_nick: string } | { writer_nick: string }[] | null;
 }
+
+/**
+ * When a poster gives no end time we must still block SOMETHING: rendering a zero-length
+ * sliver left the rest of the evening looking free, which is how a collision happens — the
+ * same "booked time shown as free" bug as hiding a booking entirely. So assume the median
+ * real booking length (2h; 46% of 231 bookings, the single most common). It can hide up to
+ * an hour of genuinely free time ~twice a year, which is far cheaper than a double-booking.
+ * The UI still shows "19:00–?" — we block defensively without pretending to know.
+ */
+const ASSUMED_DUR = 120;
 
 const nickOf = (p: SlotRow["posts"]): string | null =>
   (Array.isArray(p) ? p[0]?.writer_nick : p?.writer_nick) ?? null;
@@ -35,19 +45,25 @@ export async function getSlots(from: string, to: string): Promise<UISlot[]> {
     .order("start_min", { nullsFirst: true });
   if (error) throw new Error(`slots query: ${error.message}`);
 
-  return (data as unknown as SlotRow[])
-    // A null time means the poster never typed one; it can't be placed on a grid.
-    .filter((r) => r.start_min !== null && r.end_min !== null)
-    .map((r) => ({
-      date: r.date,
-      room: r.room,
-      startMin: r.start_min as number,
-      endMin: r.end_min as number,
-      movie: r.movie,
-      person: r.person,
-      // An explicit name in the title wins — it's often a group ("수영모"), which says more
-      // than an individual's nick. Otherwise fall back to whoever posted.
-      who: r.person ?? nickOf(r.posts) ?? null,
-      status: r.needs_review ? "needs_review" : "booked",
-    }));
+  return (data as unknown as SlotRow[]).map(rowToSlot).filter((s): s is UISlot => s !== null);
+}
+
+/** Exported for tests: the row → view mapping, including the defensive end-time policy. */
+export function rowToSlot(r: SlotRow): UISlot | null {
+  // No start at all → nothing to place on a grid. A missing END is recoverable.
+  if (r.start_min === null) return null;
+  const endAssumed = r.end_min === null;
+  return {
+    date: r.date,
+    room: r.room,
+    startMin: r.start_min,
+    endMin: endAssumed ? r.start_min + ASSUMED_DUR : (r.end_min as number),
+    endAssumed,
+    movie: r.movie,
+    person: r.person,
+    // An explicit name in the title wins — it's often a group ("수영모"), which says more
+    // than an individual's nick. Otherwise fall back to whoever posted.
+    who: r.person ?? nickOf(r.posts) ?? null,
+    status: r.needs_review ? "needs_review" : "booked",
+  };
 }
