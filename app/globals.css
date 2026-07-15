@@ -13,14 +13,32 @@
   --line-soft: rgba(0, 0, 0, 0.05);
   --grid-line: rgba(0, 0, 0, 0.045);
 
-  /* Ink */
+  /* Ink — every step carries real text, so every step must clear WCAG AA (4.5:1) on both
+     --card and --surface. --ink-faint was 0.45 → 3.3:1 and failed on 11+ nodes (요일, hour
+     ticks, week labels). Raising it alone would have collided with --ink-muted at 0.55, so
+     the whole ramp moved up: measured 6.1:1 (muted) and 4.7:1 (faint), still two clearly
+     distinct steps. Decorative-only tints belong in --line-*, not here. */
   --ink: #1a1a1a;
-  --ink-muted: rgba(0, 0, 0, 0.55);
-  --ink-faint: rgba(0, 0, 0, 0.45);
+  --ink-muted: rgba(0, 0, 0, 0.62);
+  --ink-faint: rgba(0, 0, 0, 0.55);
 
-  /* Accent + state (contrast-checked against their own backgrounds) */
-  --accent: #3b6ef6;
-  --accent-press: #2a55c9;
+  /* Accent, split by role — #3b6ef6 is too light to carry text either way:
+       as 12px text on --card it measures 4.20:1, and white on it measures 4.42:1.
+     Both fail AA (14px bold is NOT WCAG "large text" — that needs 18.66px bold).
+     So the bright accent is for FILLS ONLY, where 3:1 as a non-text UI component applies
+     and it passes at 4.20. Anything carrying text uses --accent-ink. */
+  --accent: #3b6ef6; /* decorative fills: legend dot, week segments, borders */
+  --accent-ink: #2a55c9; /* accent as text (6.15:1 on card) or under white text (6.48:1) */
+  --accent-press: #1e40af; /* pressed/hover, darker still (8.72:1 under white) */
+  --accent-tint: rgba(59, 110, 246, 0.06); /* free-slot hover */
+  --accent-tint-strong: rgba(59, 110, 246, 0.12); /* free-slot press */
+
+  /* Chrome tints that had leaked in hard-coded — DESIGN.md promises tokens only. */
+  --sunken-strong: rgba(0, 0, 0, 0.05); /* inactive segmented pill */
+  --scrim: rgba(20, 18, 14, 0.32); /* sheet backdrop */
+  --handle: rgba(0, 0, 0, 0.14); /* sheet grab handle */
+  --ink-disabled: rgba(0, 0, 0, 0.5); /* disabled control glyph (exempt from AA) */
+  --on-accent: #fff; /* text on --accent */
   --booked-bg: #eef2ff;
   --booked-border: rgba(59, 110, 246, 0.3);
   --booked-ink: #1a2547;

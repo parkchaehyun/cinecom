@@ -21,6 +21,7 @@
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "axe-core": "^4.12.1",
     "pg": "^8.22.0",
     "puppeteer-core": "^25.3.0",
     "tailwindcss": "^4",

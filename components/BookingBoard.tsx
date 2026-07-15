@@ -74,6 +74,9 @@ export default function BookingBoard({ slots, dates, today, initialIdx, loggedIn
   const [error, setError] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const dateInputRef = useRef<HTMLInputElement>(null);
+  const dialogRef = useRef<HTMLDivElement>(null);
+  const cardRef = useRef<HTMLElement>(null);
+  const returnFocusRef = useRef<HTMLElement | null>(null);
   const router = useRouter();
   const day = dates[dateIdx];
 
@@ -94,9 +97,43 @@ export default function BookingBoard({ slots, dates, today, initialIdx, loggedIn
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [day.date, view]);
 
+  /**
+   * `aria-modal="true"` promises assistive tech that everything behind the sheet is
+   * unreachable, so we have to actually honour it: move focus in, keep Tab inside, make
+   * the background inert, and hand focus back on close. Without this a screen reader is
+   * told the board is hidden while a keyboard user can still tab straight into it.
+   */
   useEffect(() => {
-    if (!sheet) return;
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && setSheet(null);
+    if (!sheet) {
+      // Restore focus to whatever opened the sheet (the free-slot button).
+      returnFocusRef.current?.focus?.();
+      returnFocusRef.current = null;
+      return;
+    }
+    const focusables = () =>
+      Array.from(
+        dialogRef.current?.querySelectorAll<HTMLElement>(
+          'button:not([disabled]), input:not([disabled]), [href], [tabindex]:not([tabindex="-1"])',
+        ) ?? [],
+      );
+
+    focusables()[0]?.focus();
+
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") return setSheet(null);
+      if (e.key !== "Tab") return;
+      const f = focusables();
+      if (!f.length) return;
+      const [first, last] = [f[0], f[f.length - 1]];
+      // Wrap at both ends so focus can never escape into the inert background.
+      if (e.shiftKey && document.activeElement === first) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && document.activeElement === last) {
+        e.preventDefault();
+        first.focus();
+      }
+    };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [sheet]);
@@ -133,6 +170,7 @@ export default function BookingBoard({ slots, dates, today, initialIdx, loggedIn
     }
     // Snapping can land outside the gap, so the gap always wins.
     start = Math.max(gapStart, Math.min(start, Math.max(gapStart, gapEnd - MIN_BOOKING)));
+    returnFocusRef.current = e.currentTarget; // hand focus back here when the sheet closes
     setSheet({ room, day, startMin: start, endMin: Math.min(start + DEFAULT_DUR, gapEnd), maxEnd: gapEnd, movie: "" });
   }
 
@@ -201,11 +239,15 @@ export default function BookingBoard({ slots, dates, today, initialIdx, loggedIn
 
   return (
     <div style={{ minHeight: "100dvh", background: "var(--page)", display: "flex", justifyContent: "center", padding: "20px 12px" }}>
-      <div style={{ width: "100%", maxWidth: 440, background: "var(--card)", border: "1px solid var(--line)", borderRadius: "var(--r-xl)", boxShadow: "var(--shadow-card)", overflow: "hidden", alignSelf: "flex-start" }}>
+      {/* inert while the sheet is open: aria-modal only *claims* the background is gone —
+          this is what actually removes it from focus and the a11y tree. */}
+      <main ref={cardRef} inert={!!sheet} style={{ width: "100%", maxWidth: 440, background: "var(--card)", border: "1px solid var(--line)", borderRadius: "var(--r-xl)", boxShadow: "var(--shadow-card)", overflow: "hidden", alignSelf: "flex-start" }}>
         <header style={{ padding: "14px 16px 14px" }}>
           {/* Club mark: projector beam + cinecom wordmark, lifted off the logo's yellow block.
               Identity, not chrome — small, black, and quiet above the controls. */}
-          <img src="/cinecom-mark.png" alt="씨네꼼" width={104} height={39} style={{ display: "block", marginBottom: 10 }} />
+          <h1 style={{ margin: "0 0 10px" }}>
+            <img src="/cinecom-mark.png" alt="씨네꼼 상영실 예약" width={104} height={39} style={{ display: "block" }} />
+          </h1>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
             <NavBtn label="이전 날짜" glyph="‹" onClick={() => setDateIdx((i) => Math.max(0, i - 1))} disabled={view === "week" || dateIdx === 0} />
 
@@ -284,14 +326,14 @@ export default function BookingBoard({ slots, dates, today, initialIdx, loggedIn
           <Pill label="오늘" active={view === "day"} onClick={goToday} />
           <Pill label="이번주" active={view === "week"} onClick={() => setView("week")} />
         </div>
-      </div>
+      </main>
 
       {sheet && (
         <>
-          <div onClick={() => setSheet(null)} style={{ position: "fixed", inset: 0, background: "rgba(20,18,14,.32)", zIndex: "var(--z-backdrop)" as unknown as number, animation: `fade-in var(--dur) var(--ease-out-quart)` }} />
-          <div role="dialog" aria-modal="true" aria-label="예약글 작성" style={{ position: "fixed", left: "50%", bottom: 0, transform: "translateX(-50%)", width: "100%", maxWidth: 440, zIndex: "var(--z-sheet)" as unknown as number, animation: `sheet-in var(--dur) var(--ease-out-quart)` }}>
+          <div onClick={() => setSheet(null)} style={{ position: "fixed", inset: 0, background: "var(--scrim)", zIndex: "var(--z-backdrop)" as unknown as number, animation: `fade-in var(--dur) var(--ease-out-quart)` }} />
+          <div ref={dialogRef} role="dialog" aria-modal="true" aria-label="예약글 작성" style={{ position: "fixed", left: "50%", bottom: 0, transform: "translateX(-50%)", width: "100%", maxWidth: 440, zIndex: "var(--z-sheet)" as unknown as number, animation: `sheet-in var(--dur) var(--ease-out-quart)` }}>
             <div style={{ background: "var(--surface)", borderRadius: "var(--r-lg) var(--r-lg) 0 0", boxShadow: "var(--shadow-sheet)", padding: "16px 18px 22px" }}>
-              <div aria-hidden style={{ width: 32, height: 4, borderRadius: 2, background: "rgba(0,0,0,.14)", margin: "0 auto 14px" }} />
+              <div aria-hidden style={{ width: 32, height: 4, borderRadius: 2, background: "var(--handle)", margin: "0 auto 14px" }} />
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 4 }}>
                 <h2 style={{ font: `700 var(--text-base) var(--font-sans)`, margin: 0 }}>예약글 작성</h2>
                 <button onClick={() => setSheet(null)} aria-label="닫기" style={{ width: 44, height: 44, marginRight: -10, borderRadius: "var(--r-sm)", border: "none", background: "transparent", color: "var(--ink-muted)", cursor: "pointer", fontSize: 16 }}>
@@ -351,7 +393,7 @@ export default function BookingBoard({ slots, dates, today, initialIdx, loggedIn
                   {error}
                 </p>
               )}
-              <button onClick={submit} disabled={busy} className="primary" style={{ width: "100%", padding: 14, borderRadius: "var(--r-md)", border: "none", background: "var(--accent)", color: "#fff", font: `700 var(--text-sm) var(--font-sans)`, cursor: busy ? "default" : "pointer", opacity: busy ? 0.7 : 1 }}>
+              <button onClick={submit} disabled={busy} className="primary" style={{ width: "100%", padding: 14, borderRadius: "var(--r-md)", border: "none", background: "var(--accent-ink)", color: "var(--on-accent)", font: `700 var(--text-sm) var(--font-sans)`, cursor: busy ? "default" : "pointer", opacity: busy ? 0.7 : 1 }}>
                 {busy ? "작성 중…" : loggedIn ? "예약글 작성" : "네이버로 로그인하고 예약글 작성"}
               </button>
             </div>
@@ -361,13 +403,13 @@ export default function BookingBoard({ slots, dates, today, initialIdx, loggedIn
 
       <style>{`
         .free-slot { transition: background var(--dur) var(--ease-out-quart), border-color var(--dur) var(--ease-out-quart); }
-        .free-slot:hover { background: rgba(59,110,246,.06); border-color: var(--accent); }
-        .free-slot:active { background: rgba(59,110,246,.12); }
+        .free-slot:hover { background: var(--accent-tint); border-color: var(--accent); }
+        .free-slot:active { background: var(--accent-tint-strong); }
         .primary { transition: background var(--dur) var(--ease-out-quart); }
         .primary:hover { background: var(--accent-press); }
         .nav:hover:not(:disabled) { background: var(--sunken); }
         /* Disabled via a real colour, not an opacity stack (which crushed contrast to 1.1:1). */
-        .nav:disabled { color: rgba(0,0,0,.5); background: var(--sunken); border-color: var(--line-soft); cursor: default; }
+        .nav:disabled { color: var(--ink-disabled); background: var(--sunken); border-color: var(--line-soft); cursor: default; }
         .datebtn:hover { background: var(--sunken); }
         .weekrow { transition: background var(--dur) var(--ease-out-quart); }
         .weekrow:hover { background: var(--sunken); }
@@ -400,7 +442,7 @@ function WeekView({ dates, slots, todayDate, onPickDate }: { dates: DayInfo[]; s
       {dates.map((d) => (
         <button key={d.date} onClick={() => onPickDate(d.date)} className="weekrow" aria-label={`${d.md} ${d.wd} 자세히 보기`} style={{ display: "flex", alignItems: "center", gap: 8, width: "100%", padding: "9px 4px", border: "none", borderBottom: "1px solid var(--line-soft)", background: "none", cursor: "pointer", borderRadius: "var(--r-sm)" }}>
           <span style={{ width: 56, flex: "none", textAlign: "left" }}>
-            <span style={{ display: "block", font: `700 var(--text-xs)/1.2 var(--font-sans)`, color: d.date === todayDate ? "var(--accent)" : "var(--ink)", whiteSpace: "nowrap" }}>{d.md}</span>
+            <span style={{ display: "block", font: `700 var(--text-xs)/1.2 var(--font-sans)`, color: d.date === todayDate ? "var(--accent-ink)" : "var(--ink)", whiteSpace: "nowrap" }}>{d.md}</span>
             <span style={{ display: "block", font: `500 9px/1.3 var(--font-sans)`, color: "var(--ink-faint)" }}>{d.wd}</span>
           </span>
           {ROOMS.map((room) => (
@@ -476,7 +518,8 @@ function CalendarIcon() {
 
 function Pill({ label, active, onClick }: { label: string; active: boolean; onClick: () => void }) {
   return (
-    <button onClick={onClick} aria-pressed={active} style={{ flex: 1, padding: "11px 0", borderRadius: "var(--r-md)", border: "none", background: active ? "var(--ink)" : "rgba(0,0,0,.05)", color: active ? "var(--surface)" : "var(--ink-muted)", font: `700 var(--text-sm) var(--font-sans)`, cursor: "pointer" }}>
+    // minHeight 44: the only controls that fell under the 44px touch target (they were 38).
+    <button onClick={onClick} aria-pressed={active} style={{ flex: 1, minHeight: 44, padding: "11px 0", borderRadius: "var(--r-md)", border: "none", background: active ? "var(--ink)" : "var(--sunken-strong)", color: active ? "var(--surface)" : "var(--ink-muted)", font: `700 var(--text-sm) var(--font-sans)`, cursor: "pointer" }}>
       {label}
     </button>
   );
