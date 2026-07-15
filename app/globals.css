@@ -97,6 +97,10 @@ body {
   border-radius: 4px;
 }
 
+/* The sheet centres with `margin: 0 auto`, NOT translateX(-50%): an animated transform
+   replaces the whole property, so a keyframe touching translateY would drop the centring
+   for the animation's duration and the sheet would fly in half a width off, then snap.
+   Keeping centring out of `transform` leaves it free for motion. */
 @keyframes sheet-in {
   from {
     transform: translateY(100%);

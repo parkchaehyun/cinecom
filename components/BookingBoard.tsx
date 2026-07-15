@@ -72,6 +72,10 @@ export default function BookingBoard({ slots, dates, today, initialIdx, loggedIn
   const [sheet, setSheet] = useState<Sheet | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Drag-to-dismiss: the grab handle promises it, so it has to work.
+  const [dragY, setDragY] = useState(0);
+  const [dragging, setDragging] = useState(false);
+  const dragFrom = useRef<number | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const dateInputRef = useRef<HTMLInputElement>(null);
   const dialogRef = useRef<HTMLDivElement>(null);
@@ -172,6 +176,31 @@ export default function BookingBoard({ slots, dates, today, initialIdx, loggedIn
     start = Math.max(gapStart, Math.min(start, Math.max(gapStart, gapEnd - MIN_BOOKING)));
     returnFocusRef.current = e.currentTarget; // hand focus back here when the sheet closes
     setSheet({ room, day, startMin: start, endMin: Math.min(start + DEFAULT_DUR, gapEnd), maxEnd: gapEnd, movie: "" });
+  }
+
+  /* Swipe-down-to-dismiss. Pointer events so mouse and touch share one path; the drag zone
+     sets touch-action:none, without which the browser claims the gesture for scrolling and
+     pointermove never fires. Downward only — dragging a bottom sheet upward means nothing. */
+  function onDragStart(e: React.PointerEvent<HTMLDivElement>) {
+    dragFrom.current = e.clientY;
+    setDragging(true);
+    e.currentTarget.setPointerCapture(e.pointerId);
+  }
+  function onDragMove(e: React.PointerEvent<HTMLDivElement>) {
+    if (dragFrom.current === null) return;
+    setDragY(Math.max(0, e.clientY - dragFrom.current));
+  }
+  function onDragEnd() {
+    if (dragFrom.current === null) return;
+    dragFrom.current = null;
+    setDragging(false);
+    const h = dialogRef.current?.offsetHeight ?? 400;
+    if (dragY > Math.min(120, h * 0.25)) {
+      setDragY(h); // carry it the rest of the way out, then unmount
+      setTimeout(() => setSheet(null), 180);
+    } else {
+      setDragY(0); // didn't travel far enough — snap back
+    }
   }
 
   /** Editing the start MOVES the booking (duration held); editing the end RESIZES it. */
@@ -331,18 +360,47 @@ export default function BookingBoard({ slots, dates, today, initialIdx, loggedIn
       {sheet && (
         <>
           <div onClick={() => setSheet(null)} style={{ position: "fixed", inset: 0, background: "var(--scrim)", zIndex: "var(--z-backdrop)" as unknown as number, animation: `fade-in var(--dur) var(--ease-out-quart)` }} />
-          <div ref={dialogRef} role="dialog" aria-modal="true" aria-label="예약글 작성" style={{ position: "fixed", left: "50%", bottom: 0, transform: "translateX(-50%)", width: "100%", maxWidth: 440, zIndex: "var(--z-sheet)" as unknown as number, animation: `sheet-in var(--dur) var(--ease-out-quart)` }}>
+          <div
+            ref={dialogRef}
+            role="dialog"
+            aria-modal="true"
+            aria-label="예약글 작성"
+            style={{
+              position: "fixed",
+              left: 0,
+              right: 0,
+              bottom: 0,
+              margin: "0 auto", // centring must NOT live in `transform` — the animation owns that
+              width: "100%",
+              maxWidth: 440,
+              zIndex: "var(--z-sheet)" as unknown as number,
+              transform: `translateY(${dragY}px)`,
+              transition: dragging ? "none" : "transform var(--dur) var(--ease-out-quart)",
+              animation: `sheet-in var(--dur) var(--ease-out-quart)`,
+            }}
+          >
             <div style={{ background: "var(--surface)", borderRadius: "var(--r-lg) var(--r-lg) 0 0", boxShadow: "var(--shadow-sheet)", padding: "16px 18px 22px" }}>
-              <div aria-hidden style={{ width: 32, height: 4, borderRadius: 2, background: "var(--handle)", margin: "0 auto 14px" }} />
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 4 }}>
-                <h2 style={{ font: `700 var(--text-base) var(--font-sans)`, margin: 0 }}>예약글 작성</h2>
-                <button onClick={() => setSheet(null)} aria-label="닫기" style={{ width: 44, height: 44, marginRight: -10, borderRadius: "var(--r-sm)", border: "none", background: "transparent", color: "var(--ink-muted)", cursor: "pointer", fontSize: 16 }}>
-                  ✕
-                </button>
+              <div
+                onPointerDown={onDragStart}
+                onPointerMove={onDragMove}
+                onPointerUp={onDragEnd}
+                onPointerCancel={onDragEnd}
+                style={{ touchAction: "none", cursor: dragging ? "grabbing" : "grab", margin: "-16px -18px 0", padding: "16px 18px 0" }}
+              >
+                {/* Grabbable padding around a 4px line — the visual stays hairline while the
+                    target stays thumb-sized. */}
+                <div aria-hidden style={{ width: 40, height: 4, borderRadius: 2, background: "var(--handle)", margin: "0 auto 14px" }} />
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 4 }}>
+                  <h2 style={{ font: `700 var(--text-base) var(--font-sans)`, margin: 0 }}>예약글 작성</h2>
+                  {/* The close button sits inside the drag zone, so stop the gesture claiming its tap. */}
+                  <button onPointerDown={(e) => e.stopPropagation()} onClick={() => setSheet(null)} aria-label="닫기" style={{ width: 44, height: 44, marginRight: -10, borderRadius: "var(--r-sm)", border: "none", background: "transparent", color: "var(--ink-muted)", cursor: "pointer", fontSize: 16 }}>
+                    ✕
+                  </button>
+                </div>
+                <p style={{ font: `500 var(--text-xs) var(--font-sans)`, color: "var(--ink-muted)", margin: "0 0 14px" }}>
+                  {sheet.room} · {sheet.day.md} {sheet.day.wd}
+                </p>
               </div>
-              <p style={{ font: `500 var(--text-xs) var(--font-sans)`, color: "var(--ink-muted)", margin: "0 0 14px" }}>
-                {sheet.room} · {sheet.day.md} {sheet.day.wd}
-              </p>
               <div style={{ display: "flex", gap: 8, marginBottom: 10 }}>
                 <TimeField id="start" label="시작" value={fmt(sheet.startMin)} onChange={setStart} />
                 <TimeField id="end" label="종료" value={fmt(Math.min(sheet.endMin, 1439))} onChange={(v) => setSheet({ ...sheet, endMin: parseTime(v) })} />
