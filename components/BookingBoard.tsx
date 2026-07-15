@@ -3,7 +3,9 @@
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { signIn, signOut } from "next-auth/react";
+import type { Board } from "@/lib/naver";
 import type { DayInfo, UISlot } from "@/lib/types";
+import { DEFAULT_MENU_ID } from "@/lib/naver";
 import { addDays, mondayOf } from "@/lib/dates";
 import { dayBlocks, type DayBlock } from "@/lib/occupancy";
 
@@ -85,9 +87,11 @@ interface Sheet {
   /** Where the free gap ends (next booking, or midnight) — bounds the duration chips. */
   maxEnd: number;
   movie: string;
+  /** Which cafe board to post to. Defaults to 꼼인 상영실 예약, where 96% of reservations go. */
+  menuId: number;
 }
 
-export default function BookingBoard({ slots, dates, today, initialIdx, loggedIn, userName }: { slots: UISlot[]; dates: DayInfo[]; today: string; initialIdx: number; loggedIn: boolean; userName: string | null }) {
+export default function BookingBoard({ slots, dates, today, initialIdx, loggedIn, userName, boards }: { slots: UISlot[]; dates: DayInfo[]; today: string; initialIdx: number; loggedIn: boolean; userName: string | null; boards: Board[] }) {
   const [local, setLocal] = useState<UISlot[]>(slots);
   const [dateIdx, setDateIdx] = useState(initialIdx);
   const [view, setView] = useState<"day" | "week">("day");
@@ -225,7 +229,7 @@ export default function BookingBoard({ slots, dates, today, initialIdx, loggedIn
     setError(null);
     // A gap running to midnight isn't the end of the night — the club books straight through it.
     const maxEnd = gapEnd === DAY_END ? overnightLimit(day.date, room, local) : gapEnd;
-    setSheet({ room, day, startMin: start, endMin: Math.min(start + DEFAULT_DUR, maxEnd), maxEnd, movie: "" });
+    setSheet({ room, day, startMin: start, endMin: Math.min(start + DEFAULT_DUR, maxEnd), maxEnd, movie: "", menuId: DEFAULT_MENU_ID });
   }
 
   /* Swipe-down-to-dismiss. Pointer events so mouse and touch share one path; the drag zone
@@ -311,6 +315,7 @@ export default function BookingBoard({ slots, dates, today, initialIdx, loggedIn
           startMin: sheet.startMin,
           endMin: sheet.endMin,
           movie: sheet.movie,
+          menuId: sheet.menuId,
         }),
       });
       if (res.status === 401) {
@@ -577,6 +582,31 @@ export default function BookingBoard({ slots, dates, today, initialIdx, loggedIn
                   title preview below already renders 미정. An example title implied the field was
                   required and that a real one had to be invented; the club posts 미정 all the time. */}
               <Field id="movie" label="영화 제목" placeholder="미정" value={sheet.movie} onChange={(v) => setSheet({ ...sheet, movie: v })} />
+              {/* Only when there's a real choice — with one board this would be a control that
+                  can't do anything, and the club's own numbers say 96% never leave the default.
+                  A native select so it opens the OS picker and reads long 소모임 names properly;
+                  chips would need a row of their own for a field most members never touch. */}
+              {boards.length > 1 && (
+                <div style={{ marginBottom: 10 }}>
+                  <label htmlFor="board" style={{ display: "block", font: `600 var(--text-xs) var(--font-sans)`, color: "var(--ink-muted)", marginBottom: 4 }}>
+                    게시판
+                  </label>
+                  {/* Chevron drawn, not native — same reason as the clock on the time fields:
+                      Chrome paints one and iOS paints nothing, so the platform's affordance exists
+                      on Android and not on iPhone. A chevron is right here (unlike on the time
+                      field): this genuinely is a list of options. */}
+                  <span style={{ position: "relative", display: "block" }}>
+                    <select id="board" value={sheet.menuId} onChange={(e) => setSheet({ ...sheet, menuId: Number(e.target.value) })} className="board-select" style={{ width: "100%", boxSizing: "border-box", padding: "11px 32px 11px 12px", borderRadius: "var(--r-sm)", border: "1px solid var(--line)", background: "var(--sunken)", font: `500 var(--text-base) var(--font-sans)`, color: "var(--ink)", textOverflow: "ellipsis" }}>
+                      {boards.map((b) => (
+                        <option key={b.menuId} value={b.menuId}>
+                          {b.menuName}
+                        </option>
+                      ))}
+                    </select>
+                    <ChevronIcon />
+                  </span>
+                </div>
+              )}
               {/* Mirrors the real post title — same family the cafe shows, not mono (no Hangul in mono). */}
               <p style={{ font: `500 var(--text-xs)/1.6 var(--font-sans)`, color: "var(--ink-muted)", background: "var(--page)", borderRadius: "var(--r-sm)", padding: "10px 12px", margin: "4px 0 14px", wordBreak: "keep-all" }}>
                 {preview(sheet)}
@@ -882,6 +912,15 @@ function TimeField({ id, label, value, onChange }: { id: string; label: string; 
         <ClockIcon />
       </span>
     </div>
+  );
+}
+
+/** "This is a list you can open." Same hairline family as the clock and calendar. */
+function ChevronIcon() {
+  return (
+    <svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden style={{ position: "absolute", right: 11, top: "50%", transform: "translateY(-50%)", pointerEvents: "none" }}>
+      <path d="M2.5 4.5 6 8l3.5-3.5" stroke="var(--ink-faint)" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
   );
 }
 

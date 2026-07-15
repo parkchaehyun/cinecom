@@ -133,6 +133,13 @@ input[type="time"]::-webkit-calendar-picker-indicator {
   display: none !important;
 }
 
+/* Same story as the time field: the platform's own arrow exists on Chrome and not on iOS, so we
+   draw one and drop theirs. Still a real <select>, so it opens the OS picker on a phone. */
+select.board-select {
+  -webkit-appearance: none;
+  appearance: none;
+}
+
 /* Visible, consistent keyboard focus everywhere. */
 :focus-visible {
   outline: 2px solid var(--accent);

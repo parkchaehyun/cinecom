@@ -10,6 +10,84 @@ const UA =
   "Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X) AppleWebKit/605.1.15";
 const REF = "https://m.cafe.naver.com/ca-fe/web/cafes/cinecom/menus/0";
 
+/** A board a reservation post may be written to. */
+export interface Board {
+  menuId: number;
+  menuName: string;
+}
+
+/** Standing reservation boards, outside any year folder. 13 is the canonical one and the default. */
+const STANDING_BOARDS = [DEFAULT_MENU_ID, 14, 85];
+
+const MENU_LIST = "https://apis.naver.com/cafe-web/cafe2/SideMenuList";
+
+interface SideMenu {
+  menuId: number;
+  menuName: string;
+  menuType: string; // S = section, F = folder, B = board, M = other
+  indent: boolean; // true = sits inside the folder above it
+  boardType?: string;
+}
+
+/**
+ * Boards a member may post a reservation to: the two 상영실 boards, the standing 정기 영화 모임,
+ * and every board filed under THIS YEAR's folder in the cafe's own menu.
+ *
+ * Read from the cafe rather than hardcoded, because the 소모임 list is rewritten every year — the
+ * club adds a "2027년" folder and a fresh set of boards, and a baked-in list would quietly go stale
+ * while looking fine. The menu tree gives us the real structure: menuType "F" opens a folder and
+ * `indent` marks its children, so "under 2026년" is a structural query, not a guess from names.
+ * (Name-matching would be hopeless anyway: only one board happens to carry a year, 영화와 정치경제
+ * 세미나(26), and that's its actual title rather than a convention.)
+ *
+ * Falls back to the standing boards if the menu can't be read — an unavailable list must not stop
+ * anyone booking on the board 96% of reservations already use.
+ */
+export async function fetchBoards(): Promise<Board[]> {
+  const year = new Date(Date.now() + 9 * 3600_000).getUTCFullYear(); // KST
+  const fallback = STANDING_BOARDS.map((menuId) => ({ menuId, menuName: "" }));
+  try {
+    const res = await fetch(`${MENU_LIST}?cafeId=${CLUB_ID}`, {
+      headers: { "User-Agent": UA, Referer: REF },
+      next: { revalidate: 3600 }, // the club edits this a few times a year
+    });
+    if (!res.ok) return fallback;
+    const json = (await res.json()) as { message?: { result?: { menus?: SideMenu[] } } };
+    const menus = json.message?.result?.menus ?? [];
+    if (!menus.length) return fallback;
+
+    const named = new Map(menus.filter((m) => m.menuType === "B").map((m) => [m.menuId, unescapeHtml(m.menuName)]));
+    const out: Board[] = [];
+    for (const menuId of STANDING_BOARDS) {
+      const menuName = named.get(menuId);
+      if (menuName) out.push({ menuId, menuName });
+    }
+    let inYear = false;
+    for (const m of menus) {
+      if (m.menuType === "F") {
+        inYear = m.menuName === `${year}년`;
+        continue;
+      }
+      if (inYear && m.menuType === "B" && m.indent && !STANDING_BOARDS.includes(m.menuId)) {
+        out.push({ menuId: m.menuId, menuName: unescapeHtml(m.menuName) });
+      }
+    }
+    return out.length ? out : fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+/** Board names arrive HTML-escaped — "&lt;이란&gt; 영화제" is a real one. */
+const unescapeHtml = (s: string) =>
+  s
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&amp;/g, "&")
+    .trim();
+
 interface BoardListEntry {
   type: string;
   item?: {

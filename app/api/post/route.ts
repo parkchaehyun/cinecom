@@ -4,7 +4,7 @@ import { getSlots } from "@/lib/slots";
 import { findClash } from "@/lib/occupancy";
 import { addDays } from "@/lib/dates";
 import { buildTitle } from "@/lib/title";
-import { CafeScopeError, DEFAULT_MENU_ID, postArticle } from "@/lib/naver";
+import { CafeScopeError, DEFAULT_MENU_ID, fetchBoards, postArticle } from "@/lib/naver";
 import { runIngest } from "@/lib/ingest";
 import { ROOMS } from "@/lib/types";
 
@@ -39,6 +39,13 @@ export async function POST(req: Request) {
   if (!room || !(ROOMS as readonly string[]).includes(room)) return bad("상영실이 올바르지 않습니다.");
   if (typeof startMin !== "number" || typeof endMin !== "number") return bad("시간이 올바르지 않습니다.");
   if (endMin <= startMin) return bad("종료 시간이 시작 시간보다 빨라요.");
+
+  // Never take the client's word for the board. The select only offers reservation boards, but the
+  // request is just JSON — without this, anything could be posted to 운영 공지 under a member's own
+  // name, through our app. Same list the sheet renders, so they can't disagree.
+  const menuId = b.menuId ?? DEFAULT_MENU_ID;
+  const boards = await fetchBoards();
+  if (!boards.some((x) => x.menuId === menuId)) return bad("게시판이 올바르지 않습니다.");
 
   // Pull the newest posts from the CAFE before judging. getSlots reads our own DB, which is only
   // ever as fresh as the last cron — so a booking posted straight to the cafe two minutes ago is
@@ -83,7 +90,7 @@ export async function POST(req: Request) {
       accessToken: session.accessToken,
       subject,
       content,
-      menuId: b.menuId ?? DEFAULT_MENU_ID,
+      menuId,
     });
   } catch (e) {
     // Declined 카페 permission at login — recoverable, and the client knows how: re-consent.
