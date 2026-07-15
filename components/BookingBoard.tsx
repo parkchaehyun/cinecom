@@ -222,9 +222,9 @@ export default function BookingBoard({ slots, dates, today, initialIdx, loggedIn
             <NavBtn label="다음 날짜" glyph="›" onClick={() => setDateIdx((i) => Math.min(dates.length - 1, i + 1))} disabled={view === "week" || dateIdx === dates.length - 1} />
           </div>
           <div style={{ display: "flex", justifyContent: "center", gap: 14 }}>
-            <Legend border={`1.5px dashed var(--free-border)`} text="예약가능" />
-            <Legend bg="var(--accent)" text="예약됨" />
-            <Legend bg="var(--review-border)" text="확인 필요" />
+            <Legend swatch={<DashSwatch />} text="예약가능" />
+            <Legend swatch={<Dot color="var(--accent)" />} text="예약됨" />
+            <Legend swatch={<Dot color="var(--review-border)" />} text="확인 필요" />
           </div>
         </header>
 
@@ -483,10 +483,28 @@ function NavBtn({ label, glyph, onClick, disabled }: { label: string; glyph: str
   );
 }
 
-function Legend({ bg, border, text }: { bg?: string; border?: string; text: string }) {
+/**
+ * A CSS dashed border can't render at legend size: an 8px box has only ~32px of perimeter,
+ * the corner radii eat half of it, and Chrome's dash period (~3x border-width) is longer
+ * than the straight run on each side — so it came out as 3-4 disconnected marks rather than
+ * a dashed box. SVG lets us set the dash array explicitly and fit ~8 dashes around it.
+ */
+function DashSwatch() {
+  return (
+    <svg width="10" height="10" viewBox="0 0 10 10" aria-hidden style={{ flex: "none", display: "block" }}>
+      <rect x="1" y="1" width="8" height="8" rx="1.5" fill="none" stroke="var(--free-border)" strokeWidth="1.2" strokeDasharray="2 1.6" />
+    </svg>
+  );
+}
+
+function Dot({ color }: { color: string }) {
+  return <span aria-hidden style={{ width: 8, height: 8, borderRadius: 2, background: color, display: "block", flex: "none" }} />;
+}
+
+function Legend({ swatch, text }: { swatch: React.ReactNode; text: string }) {
   return (
     <span style={{ display: "flex", alignItems: "center", gap: 5, font: `500 var(--text-xs)/1 var(--font-sans)`, color: "var(--ink-muted)" }}>
-      <span aria-hidden style={{ width: 8, height: 8, borderRadius: 2, background: bg ?? "transparent", border: border ?? "none", display: "inline-block" }} />
+      {swatch}
       {text}
     </span>
   );
