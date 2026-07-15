@@ -200,7 +200,9 @@ export default function BookingBoard({ slots, dates, today, initialIdx, loggedIn
     let idx = dates.findIndex((d) => d.date === value);
     if (idx < 0) idx = value < dates[0].date ? 0 : dates.length - 1;
     setDateIdx(idx);
-    setView("day");
+    // Deliberately does NOT force day view: in week view the picker navigates to the week holding
+    // that date, and the 오늘/이번주 pills stay the only thing that switches mode. Changing view as
+    // a side effect of navigating is how a member ends up somewhere they didn't ask to be.
   }
 
   function openFrom(e: React.MouseEvent<HTMLButtonElement>, room: string, gapStart: number, gapEnd: number) {
@@ -352,6 +354,28 @@ export default function BookingBoard({ slots, dates, today, initialIdx, loggedIn
     setView("day");
   }
 
+  /* Week navigation. The arrows used to be disabled outright in week view — permanently greyed
+     controls that promised navigation and refused it, while the header announced a single day the
+     grid below wasn't showing. Both now describe the week that's actually on screen.
+     Landing on the Monday (not day+7) keeps the header stable: stepping from a Thursday would
+     otherwise leave the selected day drifting through each week for no visible reason. */
+  const weekMondayAt = (delta: number) => addDays(mondayOf(day.date), delta * 7);
+  const weekIdx = (delta: number) => dates.findIndex((d) => d.date === weekMondayAt(delta));
+  function stepWeek(delta: number) {
+    const i = weekIdx(delta);
+    if (i >= 0) setDateIdx(i);
+  }
+
+  /** "7월 13일 – 19일", or "7월 27일 – 8월 2일" when the week straddles two months. */
+  const weekLabel = () => {
+    const [a, b] = [weekDates[0], weekDates[weekDates.length - 1]];
+    if (!a || !b) return day.md;
+    const month = (md: string) => md.split(" ")[0];
+    return month(a.md) === month(b.md) ? `${a.md} – ${b.md.split(" ")[1]}` : `${a.md} – ${b.md}`;
+  };
+
+  const isWeek = view === "week";
+
   return (
     /* One screen, no page scroll. The card is exactly the viewport minus its margin and the footer,
        and the only thing that scrolls is the grid — so the date, the room headers and the view
@@ -385,9 +409,9 @@ export default function BookingBoard({ slots, dates, today, initialIdx, loggedIn
               space to teach two things the board already says (a filled block names who booked it;
               a dashed empty box is the only tappable thing on the grid). */}
           <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 2 }}>
-            <NavBtn label="이전 날짜" glyph="‹" onClick={() => setDateIdx((i) => Math.max(0, i - 1))} disabled={view === "week" || dateIdx === 0} />
-            <DateField day={day} dates={dates} onPick={onDateInput} inputRef={dateInputRef} onOpen={openPicker} />
-            <NavBtn label="다음 날짜" glyph="›" onClick={() => setDateIdx((i) => Math.min(dates.length - 1, i + 1))} disabled={view === "week" || dateIdx === dates.length - 1} />
+            <NavBtn label={isWeek ? "이전 주" : "이전 날짜"} glyph="‹" onClick={() => (isWeek ? stepWeek(-1) : setDateIdx((i) => Math.max(0, i - 1)))} disabled={isWeek ? weekIdx(-1) < 0 : dateIdx === 0} />
+            <DateField main={isWeek ? weekLabel() : day.md} sub={isWeek ? undefined : day.wd} value={day.date} dates={dates} onPick={onDateInput} inputRef={dateInputRef} onOpen={openPicker} />
+            <NavBtn label={isWeek ? "다음 주" : "다음 날짜"} glyph="›" onClick={() => (isWeek ? stepWeek(1) : setDateIdx((i) => Math.min(dates.length - 1, i + 1)))} disabled={isWeek ? weekIdx(1) < 0 : dateIdx === dates.length - 1} />
           </div>
         </header>
 
@@ -748,25 +772,26 @@ function CalendarIcon() {
  * the native picker with no JS at all, and `showPicker()` becomes a desktop convenience on top —
  * where a click otherwise only opens the picker from the input's own tiny calendar glyph.
  */
-function DateField({ day, dates, onPick, inputRef, onOpen }: { day: DayInfo; dates: DayInfo[]; onPick: (v: string) => void; inputRef: React.RefObject<HTMLInputElement | null>; onOpen: () => void }) {
+function DateField({ main, sub, value, dates, onPick, inputRef, onOpen }: { main: string; sub?: string; value: string; dates: DayInfo[]; onPick: (v: string) => void; inputRef: React.RefObject<HTMLInputElement | null>; onOpen: () => void }) {
   return (
     <span className="datewrap" style={{ position: "relative", display: "inline-flex", alignItems: "center", gap: 7, padding: "4px 8px", borderRadius: "var(--r-sm)" }}>
       <CalendarIcon />
       {/* Centred, not left-aligned: the date is the widest thing here, so centring the block puts
-          수요일 on the date's own axis rather than against its left edge. */}
+          수요일 on the date's own axis rather than against its left edge. In week view there's no
+          요일 to carry — a week has seven — so the range stands alone and the block centres itself. */}
       <span style={{ textAlign: "center" }}>
-        <span style={{ display: "block", font: `700 var(--text-xl)/1.15 var(--font-sans)`, letterSpacing: "-0.02em", color: "var(--ink)" }}>{day.md}</span>
-        <span style={{ display: "block", font: `500 var(--text-xs)/1.3 var(--font-sans)`, color: "var(--ink-faint)" }}>{day.wd}</span>
+        <span style={{ display: "block", font: `700 var(--text-xl)/1.15 var(--font-sans)`, letterSpacing: "-0.02em", color: "var(--ink)", whiteSpace: "nowrap" }}>{main}</span>
+        {sub && <span style={{ display: "block", font: `500 var(--text-xs)/1.3 var(--font-sans)`, color: "var(--ink-faint)" }}>{sub}</span>}
       </span>
       <input
         ref={inputRef}
         type="date"
-        value={day.date}
+        value={value}
         min={dates[0].date}
         max={dates[dates.length - 1].date}
         onChange={(e) => onPick(e.target.value)}
         onClick={onOpen}
-        aria-label={`날짜 선택, 현재 ${day.md} ${day.wd}`}
+        aria-label={`날짜 선택, 현재 ${main}${sub ? ` ${sub}` : ""}`}
         style={{ position: "absolute", inset: 0, width: "100%", height: "100%", opacity: 0, border: "none", padding: 0, margin: 0, background: "none", cursor: "pointer", WebkitAppearance: "none", appearance: "none" }}
       />
     </span>
