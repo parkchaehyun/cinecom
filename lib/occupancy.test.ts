@@ -9,6 +9,7 @@ const slot = (p: Partial<UISlot>): UISlot => ({
   endMin: 21 * 60,
   movie: null,
   person: null,
+  who: null,
   status: "booked",
   ...p,
 });

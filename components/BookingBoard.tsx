@@ -440,9 +440,10 @@ function SlotBlock({ block }: { block: DayBlock }) {
         {slot.movie ?? "미정"}
       </div>
       <div style={{ font: `500 var(--text-xs)/1.4 var(--font-sans)`, color: review ? "var(--review-meta)" : "var(--booked-meta)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-        {/* Always the times the club actually wrote (22:30–25:30), not the clipped ones —
-            25:30 reads as one continuous evening; 01:30 would look like a typo. */}
-        {review ? "확인 필요" : "예약됨"} · {fmt(slot.startMin)}–{fmt(slot.endMin)}
+        {/* "예약됨" was redundant — a filled block already means booked — so the line carries
+            who booked it instead. Review slots keep the warning: it outranks the name.
+            Times are always what the club wrote (22:30–25:30), not the midnight-clipped ones. */}
+        {review ? "확인 필요" : (slot.who ?? "예약됨")} · {fmt(slot.startMin)}–{fmt(slot.endMin)}
       </div>
     </div>
   );

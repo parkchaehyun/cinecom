@@ -26,6 +26,8 @@ export interface UISlot {
   endMin: number;
   movie: string | null;
   person: string | null;
+  /** Who booked it: the name in the title if given, else the poster's Naver nick. */
+  who: string | null;
   status: SlotStatus;
 }
 
