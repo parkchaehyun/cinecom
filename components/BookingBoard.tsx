@@ -312,15 +312,17 @@ export default function BookingBoard({ slots, dates, today, initialIdx, loggedIn
   }
 
   return (
-    /* One screen, no page scroll. The card is exactly the viewport minus its margin, and the only
-       thing that scrolls is the grid — so the date, the room headers and the view switcher are
-       always reachable without scrolling past them. Before this the page AND the grid both
-       scrolled: two nested scrollers, where a drag near the edge moved the wrong one. dvh (not vh)
-       because mobile Safari's vh assumes the URL bar is hidden and overshoots by ~60px. */
-    <div style={{ height: "100dvh", background: "var(--page)", display: "flex", justifyContent: "center", padding: "16px 12px", boxSizing: "border-box" }}>
+    /* One screen, no page scroll. The card is exactly the viewport minus its margin and the footer,
+       and the only thing that scrolls is the grid — so the date, the room headers and the view
+       switcher are always reachable without scrolling past them. Before this the page AND the grid
+       both scrolled: two nested scrollers, where a drag near the edge moved the wrong one. dvh (not
+       vh) because mobile Safari's vh assumes the URL bar is hidden and overshoots by ~60px.
+       Column layout so the policy link can sit under the card as page furniture rather than inside
+       the app's own chrome. */
+    <div style={{ height: "100dvh", background: "var(--page)", display: "flex", flexDirection: "column", alignItems: "center", padding: "16px 12px 8px", boxSizing: "border-box" }}>
       {/* inert while the sheet is open: aria-modal only *claims* the background is gone —
           this is what actually removes it from focus and the a11y tree. */}
-      <main ref={cardRef} inert={!!sheet} className="card" style={{ width: "100%", background: "var(--card)", border: "1px solid var(--line)", borderRadius: "var(--r-xl)", boxShadow: "var(--shadow-card)", overflow: "hidden", display: "flex", flexDirection: "column", minHeight: 0 }}>
+      <main ref={cardRef} inert={!!sheet} className="card" style={{ width: "100%", flex: 1, minHeight: 0, background: "var(--card)", border: "1px solid var(--line)", borderRadius: "var(--r-xl)", boxShadow: "var(--shadow-card)", overflow: "hidden", display: "flex", flexDirection: "column" }}>
         <header style={{ padding: "12px 16px 10px", flex: "none" }}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, marginBottom: 8 }}>
             {/* Club mark: projector beam + cinecom wordmark, lifted off the logo's yellow block.
@@ -394,17 +396,21 @@ export default function BookingBoard({ slots, dates, today, initialIdx, loggedIn
           <WeekView dates={weekDates} slots={local} todayDate={today} onPickDate={pickDate} />
         )}
 
-        {/* View switcher, and the policy link riding along on its row rather than claiming one of
-            its own — 개인정보보호법 제30조 requires the policy be 공개, not prominent, and this
-            screen's whole point is that it fits without scrolling. */}
-        <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "12px 16px 14px", flex: "none" }}>
+        {/* View switcher */}
+        <div style={{ display: "flex", gap: 8, padding: "12px 16px 14px", flex: "none" }}>
           <Pill label="오늘" active={view === "day"} onClick={goToday} />
           <Pill label="이번주" active={view === "week"} onClick={() => setView("week")} />
-          <a href="/privacy" className="policy-link" style={{ flex: "none", padding: "0 2px", font: `500 var(--text-xs) var(--font-sans)`, color: "var(--ink-faint)", textDecoration: "none", whiteSpace: "nowrap", lineHeight: "44px" }}>
-            개인정보
-          </a>
         </div>
       </main>
+
+      {/* Outside the card on purpose: it's the page's furniture, not the app's chrome. Sharing the
+          view switcher's row made a legal link compete with the two controls that matter, and it
+          isn't a control. Also inert with the sheet — the background is unreachable, all of it. */}
+      <footer inert={!!sheet} style={{ flex: "none", paddingTop: 7 }}>
+        <a href="/privacy" className="policy-link" style={{ font: `500 var(--text-xs) var(--font-sans)`, color: "var(--ink-faint)", textDecoration: "none" }}>
+          개인정보처리방침
+        </a>
+      </footer>
 
       {sheet && (
         <>
