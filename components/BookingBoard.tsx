@@ -110,7 +110,11 @@ export default function BookingBoard({ slots, dates, today, initialIdx, loggedIn
   useEffect(() => {
     if (!sheet) {
       // Restore focus to whatever opened the sheet (the free-slot button).
-      returnFocusRef.current?.focus?.();
+      // preventScroll is load-bearing: focus() scrolls its target into view by default, and a
+      // free-slot button can be ~900px tall (00:00 → the evening) inside a 500px scroller —
+      // too tall to fit, so the browser scrolled to its top and the grid jumped to 00:00.
+      // The button was on screen when it was tapped; restoring focus shouldn't move the view.
+      returnFocusRef.current?.focus?.({ preventScroll: true });
       returnFocusRef.current = null;
       return;
     }
@@ -175,6 +179,10 @@ export default function BookingBoard({ slots, dates, today, initialIdx, loggedIn
     // Snapping can land outside the gap, so the gap always wins.
     start = Math.max(gapStart, Math.min(start, Math.max(gapStart, gapEnd - MIN_BOOKING)));
     returnFocusRef.current = e.currentTarget; // hand focus back here when the sheet closes
+    // A dismissing drag leaves dragY at the sheet's height to carry it off-screen; clear it here
+    // so the next sheet can't mount already translated away. Opening is the one path in, so this
+    // holds however the last one closed.
+    setDragY(0);
     setSheet({ room, day, startMin: start, endMin: Math.min(start + DEFAULT_DUR, gapEnd), maxEnd: gapEnd, movie: "" });
   }
 
