@@ -1,6 +1,5 @@
 // Read client for the 씨네꼼 Naver cafe (public, unofficial boardlist endpoint).
 // Verified: no auth/rate-limit; `type` is on the OUTER list object, not `item`.
-import iconv from "iconv-lite";
 import type { RawPost } from "./types";
 
 export const CLUB_ID = 26859626;
@@ -61,18 +60,19 @@ export async function fetchBoardPage(
 const sanitize = (s: string) => s.replace(/"/g, "'");
 
 /**
- * Percent-encode as CP949 (MS949) — the charset the cafe write API actually reads the
- * body in. Space is `+` per application/x-www-form-urlencoded. Node has no native CP949
- * encoder, hence iconv-lite.
+ * Percent-encode **twice** for the cafe write API.
+ *
+ * Naver percent-decodes the body twice, and mangles the text between the two passes
+ * (decode-as-UTF-8 → re-encode → read-as-CP949). Single-encoded text gets destroyed by
+ * that stage; double-encoded text passes through it as pure ASCII (`%EB%AF%B8…`), which
+ * the bug can't touch, and their second decode yields the original.
+ *
+ * Established by posting six encoding variants and reading them back off the cafe: every
+ * single-encoded form (UTF-8, CP949, EUC-KR, raw, `+` or `%20`) came back mangled. The
+ * charset was never the problem.
  */
-export function cp949FormEncode(value: string): string {
-  let out = "";
-  for (const b of iconv.encode(sanitize(value), "cp949")) {
-    if (b === 0x20) out += "+";
-    else if (/[A-Za-z0-9\-_.~]/.test(String.fromCharCode(b))) out += String.fromCharCode(b);
-    else out += "%" + b.toString(16).toUpperCase().padStart(2, "0");
-  }
-  return out;
+export function doubleEncode(value: string): string {
+  return encodeURIComponent(encodeURIComponent(sanitize(value)));
 }
 
 export interface PostArticleInput {
@@ -83,19 +83,7 @@ export interface PostArticleInput {
   openToAll?: boolean;
 }
 
-/**
- * Create a cafe post as the token's owner. Returns Naver's raw response.
- *
- * Encoding — established by three real posts, read back from the cafe:
- *
- *   body   charset hdr   stored `미정`   ⇒ Naver read our bytes as
- *   UTF-8  utf-8         誘몄젙          CP949
- *   UTF-8  (none)        誘몄젙          CP949
- *   CP949  MS949         占쏙옙          UTF-8   ← declaring MS949 flips it to UTF-8
- *
- * So Naver reads the body as **CP949** unless a charset param talks it out of that.
- * Hence: CP949-encoded body, and **no charset parameter**.
- */
+/** Create a cafe post as the token's owner. Returns Naver's raw response. */
 export async function postArticle({
   accessToken,
   subject,
@@ -103,10 +91,10 @@ export async function postArticle({
   menuId = DEFAULT_MENU_ID,
   openToAll = true,
 }: PostArticleInput): Promise<unknown> {
-  // Hand-built: URLSearchParams always emits UTF-8, which Naver would misread as CP949.
+  // Hand-built: URLSearchParams would encode once. See doubleEncode.
   const body = [
-    `subject=${cp949FormEncode(subject)}`,
-    `content=${cp949FormEncode(content)}`,
+    `subject=${doubleEncode(subject)}`,
+    `content=${doubleEncode(content)}`,
     `openyn=${openToAll}`,
   ].join("&");
 
@@ -114,7 +102,7 @@ export async function postArticle({
     method: "POST",
     headers: {
       Authorization: `Bearer ${accessToken}`,
-      "Content-Type": "application/x-www-form-urlencoded", // no charset — declaring one flips Naver to UTF-8
+      "Content-Type": "application/x-www-form-urlencoded",
     },
     body,
     cache: "no-store",

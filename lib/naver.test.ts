@@ -1,45 +1,52 @@
 import { describe, it, expect } from "vitest";
-import iconv from "iconv-lite";
-import { cp949FormEncode } from "./naver";
+import { doubleEncode } from "./naver";
 import { buildTitle } from "./title";
 
-// Established by reading three real posts back off the cafe: Naver reads the write body
-// as CP949 (unless a charset param flips it to UTF-8). Sending UTF-8 silently stored
-// `미정` as `誘몄젙` — the post succeeds, only the title is wrong. Hence these guards.
-describe("cp949FormEncode", () => {
-  const decode = (enc: string) =>
-    iconv.decode(
-      Buffer.from(
-        enc.replace(/\+/g, " ").replace(/%([0-9A-F]{2})/g, (_, h) => String.fromCharCode(parseInt(h, 16))),
-        "binary",
-      ),
-      "cp949",
-    );
+/**
+ * The cafe write API percent-decodes twice and mangles the text in between, so the body
+ * must be encoded twice. Six variants were posted to the real cafe and read back — every
+ * single-encoded form (UTF-8, CP949, EUC-KR, raw bytes, `+` or `%20` spaces) came back
+ * corrupted. Guarded here because the failure is SILENT: the post succeeds with HTTP 200
+ * and only the stored title is wrong.
+ */
+describe("doubleEncode", () => {
+  // What Naver effectively does: decode once (the mangle-prone stage sees only ASCII),
+  // then decode again.
+  const naverDecodesTwice = (s: string) => decodeURIComponent(decodeURIComponent(s));
 
-  it("emits CP949 bytes, not UTF-8", () => {
-    // 미정: CP949 = B9 CC C1 A4. UTF-8 would be EB AF B8 EC A0 95 → stored as 誘몄젙.
-    expect(cp949FormEncode("미정")).toBe("%B9%CC%C1%A4");
+  it("encodes twice, so Naver's first pass yields plain ASCII", () => {
+    const once = encodeURIComponent("미정"); // %EB%AF%B8%EC%A0%95
+    expect(doubleEncode("미정")).toBe("%25EB%25AF%25B8%25EC%25A0%2595");
+    // After Naver's first decode the payload is pure ASCII — nothing for the bug to corrupt.
+    expect(decodeURIComponent(doubleEncode("미정"))).toBe(once);
+    expect(/^[\x20-\x7E]*$/.test(once)).toBe(true);
   });
 
-  it("leaves unreserved ASCII alone and encodes space as +", () => {
-    expect(cp949FormEncode("23:00 - 23:59")).toBe("23%3A00+-+23%3A59");
-    expect(cp949FormEncode("abcXYZ019-_.~")).toBe("abcXYZ019-_.~");
+  it("survives Naver's two decodes", () => {
+    for (const s of ["미정", "대상영실", "수요일", "인코딩테스트"]) {
+      expect(naverDecodesTwice(doubleEncode(s)), s).toBe(s);
+    }
   });
 
-  it("round-trips a generated canonical title", () => {
+  it("round-trips a real canonical title", () => {
     const title = buildTitle({ date: "2026-07-15", room: "대상영실", startMin: 23 * 60, endMin: 1439, movie: "" });
     expect(title).toBe("7월 15일 수요일 / 대상영실 / 23:00 - 23:59 / 미정");
-    expect(decode(cp949FormEncode(title))).toBe(title);
+    expect(naverDecodesTwice(doubleEncode(title))).toBe(title);
   });
 
   it("round-trips awkward real movie titles", () => {
     for (const s of ["나, 너, 그, 그녀", "쿨레 밤페 혹은 세계의 주인은 누구인가?", "장고: 분노의 추적자", "대부 2", "."]) {
-      expect(decode(cp949FormEncode(s)), s).toBe(s);
+      expect(naverDecodesTwice(doubleEncode(s)), s).toBe(s);
     }
   });
 
   it("folds double quotes, which the write API rejects", () => {
     // Real corpus title: `"나의 최애 뮤직비디오" 상영회`
-    expect(decode(cp949FormEncode('"나의 최애 뮤직비디오" 상영회'))).toBe("'나의 최애 뮤직비디오' 상영회");
+    expect(naverDecodesTwice(doubleEncode('"나의 최애 뮤직비디오" 상영회'))).toBe("'나의 최애 뮤직비디오' 상영회");
+  });
+
+  it("never leaves a bare space or & that could break the form body", () => {
+    const enc = doubleEncode("7월 15일 / 대상영실 & 소상영실");
+    expect(enc).not.toMatch(/[ &]/);
   });
 });
