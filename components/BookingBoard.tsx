@@ -256,9 +256,12 @@ export default function BookingBoard({ slots, dates, today, initialIdx, loggedIn
                     ))}
                     {buildItems(dayBlocks(day.date, room, local)).map((item) =>
                       item.kind === "free" ? (
-                        <button key={`f${item.startMin}`} onClick={(e) => openFrom(e, room, item.startMin, item.endMin)} aria-label={`${room} ${fmt(item.startMin)}부터 ${fmt(item.endMin)}까지 예약 가능`} className="free-slot" style={{ position: "absolute", left: 4, right: 4, top: y(item.startMin), height: (item.endMin - item.startMin) * PXPM, borderRadius: "var(--r-sm)", border: "1.5px dashed var(--free-border)", background: "transparent", padding: "6px 8px", textAlign: "left", cursor: "pointer", overflow: "hidden", display: "block" }}>
-                          <span style={{ font: `600 var(--text-xs)/1.3 var(--font-sans)`, color: "var(--ink-muted)" }}>예약가능</span>
-                        </button>
+                        // No "예약가능" label: the legend teaches dashed = 예약가능 once, and
+                        // repeating it in every gap is noise against the bookings, which are the
+                        // content. On tall gaps the label sat at the top and scrolled out of view
+                        // anyway, so the dashed box was already carrying the meaning alone. The
+                        // aria-label keeps it announced for screen readers.
+                        <button key={`f${item.startMin}`} onClick={(e) => openFrom(e, room, item.startMin, item.endMin)} aria-label={`${room} ${fmt(item.startMin)}부터 ${fmt(item.endMin)}까지 예약 가능`} className="free-slot" style={{ position: "absolute", left: 4, right: 4, top: y(item.startMin), height: (item.endMin - item.startMin) * PXPM, borderRadius: "var(--r-sm)", border: "1.5px dashed var(--free-border)", background: "transparent", cursor: "pointer", display: "block" }} />
                       ) : (
                         <SlotBlock key={`s${item.block.slot.date}-${item.block.from}`} block={item.block} />
                       ),
