@@ -35,6 +35,13 @@
 
   /* Chrome tints that had leaked in hard-coded — DESIGN.md promises tokens only. */
   --sunken-strong: rgba(0, 0, 0, 0.05); /* inactive segmented pill */
+  /* The week view's 0–24h rails. --sunken (#f7f6f3) against --card (#faf9f6) is a 3/255
+     difference — 1.02:1, i.e. invisible — so the two room rails merged into one band and you
+     couldn't see where 대상영실 ended. Fill alone can't fix it without shouting over the blue
+     blocks, so the edge is drawn: a tinted well plus a hairline that ends exactly where the
+     room does. */
+  --track: rgba(0, 0, 0, 0.045);
+  --track-line: rgba(0, 0, 0, 0.13);
   --scrim: rgba(20, 18, 14, 0.32); /* sheet backdrop */
   --handle: rgba(0, 0, 0, 0.14); /* sheet grab handle */
   --ink-disabled: rgba(0, 0, 0, 0.5); /* disabled control glyph (exempt from AA) */

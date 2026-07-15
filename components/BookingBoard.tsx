@@ -596,7 +596,9 @@ function WeekView({ dates, slots, todayDate, onPickDate }: { dates: DayInfo[]; s
             <span style={{ display: "block", font: `500 9px/1.3 var(--font-sans)`, color: "var(--ink-faint)" }}>{d.wd}</span>
           </span>
           {ROOMS.map((room) => (
-            <span key={room} style={{ flex: 1, height: 18, borderRadius: 5, background: "var(--sunken)", position: "relative", overflow: "hidden", display: "block" }}>
+            // A bounded rail, not a tint: the hairline is what actually answers "where does this
+            // room's day end?", which a fill can't do without out-shouting the bookings it holds.
+            <span key={room} style={{ flex: 1, height: 18, borderRadius: 5, background: "var(--track)", border: "1px solid var(--track-line)", boxSizing: "border-box", position: "relative", overflow: "hidden", display: "block" }}>
               {WEEK_TICKS.slice(0, -1).map((t) => (
                 <span key={t} aria-hidden style={{ position: "absolute", top: 0, bottom: 0, left: `${pct(t)}%`, borderLeft: "1px solid var(--grid-line)" }} />
               ))}
