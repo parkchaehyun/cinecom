@@ -119,5 +119,5 @@ Two views behind the `오늘` / `이번주` pills (`aria-pressed` carries the st
   approved direction. Revisit alongside adding the logo.
 - Drag-to-select a range is a planned enhancement on top of tap-to-place (desktop-first; on touch it
   fights scrolling).
-- **The sheet's "네이버로 예약글 작성" does not post yet** — it adds an optimistic local block. The Naver
-  login + cafe write is the next phase.
+- The name field was removed from the sheet: titles are `날짜 / 방 / 시간 / 영화`, the majority shape.
+  `buildTitle` keeps optional-name support and the parser still reads names off existing posts.
