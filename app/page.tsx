@@ -22,6 +22,7 @@ export default async function Home() {
       today={today}
       initialIdx={initialIdx}
       loggedIn={!!session?.accessToken && !session.error}
+      userName={session?.user?.name ?? null}
     />
   );
 }

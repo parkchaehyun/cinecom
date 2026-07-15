@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { signIn } from "next-auth/react";
+import { signIn, signOut } from "next-auth/react";
 import type { DayInfo, UISlot } from "@/lib/types";
 import { addDays, mondayOf } from "@/lib/dates";
 import { dayBlocks, type DayBlock } from "@/lib/occupancy";
@@ -65,7 +65,7 @@ interface Sheet {
   movie: string;
 }
 
-export default function BookingBoard({ slots, dates, today, initialIdx, loggedIn }: { slots: UISlot[]; dates: DayInfo[]; today: string; initialIdx: number; loggedIn: boolean }) {
+export default function BookingBoard({ slots, dates, today, initialIdx, loggedIn, userName }: { slots: UISlot[]; dates: DayInfo[]; today: string; initialIdx: number; loggedIn: boolean; userName: string | null }) {
   const [local, setLocal] = useState<UISlot[]>(slots);
   const [dateIdx, setDateIdx] = useState(initialIdx);
   const [view, setView] = useState<"day" | "week">("day");
@@ -83,6 +83,10 @@ export default function BookingBoard({ slots, dates, today, initialIdx, loggedIn
   const returnFocusRef = useRef<HTMLElement | null>(null);
   const router = useRouter();
   const day = dates[dateIdx];
+  // The focus trap keys off *whether* the sheet is open, never the sheet object: every keystroke
+  // makes a new `sheet` object, so depending on the object re-ran the trap on each character and
+  // it stole focus back out of whatever you were typing in. See the effect below.
+  const sheetOpen = !!sheet;
 
   // Adopt fresh server data after router.refresh() (e.g. once a new post is ingested).
   useEffect(() => setLocal(slots), [slots]);
@@ -108,7 +112,7 @@ export default function BookingBoard({ slots, dates, today, initialIdx, loggedIn
    * told the board is hidden while a keyboard user can still tab straight into it.
    */
   useEffect(() => {
-    if (!sheet) {
+    if (!sheetOpen) {
       // Restore focus to whatever opened the sheet (the free-slot button).
       // preventScroll is load-bearing: focus() scrolls its target into view by default, and a
       // free-slot button can be ~900px tall (00:00 → the evening) inside a 500px scroller —
@@ -125,7 +129,11 @@ export default function BookingBoard({ slots, dates, today, initialIdx, loggedIn
         ) ?? [],
       );
 
-    focusables()[0]?.focus();
+    // Focus the dialog itself, not focusables()[0] — that was the ✕ button, so opening the sheet
+    // pointed the member at "close" as the first thing. Focusing the container also keeps the
+    // mobile keyboard shut (focusing an input would summon it over the sheet you just opened),
+    // and screen readers announce the dialog's label on entry. WAI-ARIA's dialog pattern.
+    dialogRef.current?.focus();
 
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") return setSheet(null);
@@ -144,7 +152,8 @@ export default function BookingBoard({ slots, dates, today, initialIdx, loggedIn
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [sheet]);
+    // `sheetOpen`, NOT `sheet`: see the note where it's declared.
+  }, [sheetOpen]);
 
   function openPicker() {
     const el = dateInputRef.current;
@@ -275,45 +284,41 @@ export default function BookingBoard({ slots, dates, today, initialIdx, loggedIn
   }
 
   return (
-    <div style={{ minHeight: "100dvh", background: "var(--page)", display: "flex", justifyContent: "center", padding: "20px 12px" }}>
+    /* One screen, no page scroll. The card is exactly the viewport minus its margin, and the only
+       thing that scrolls is the grid — so the date, the room headers and the view switcher are
+       always reachable without scrolling past them. Before this the page AND the grid both
+       scrolled: two nested scrollers, where a drag near the edge moved the wrong one. dvh (not vh)
+       because mobile Safari's vh assumes the URL bar is hidden and overshoots by ~60px. */
+    <div style={{ height: "100dvh", background: "var(--page)", display: "flex", justifyContent: "center", padding: "16px 12px", boxSizing: "border-box" }}>
       {/* inert while the sheet is open: aria-modal only *claims* the background is gone —
           this is what actually removes it from focus and the a11y tree. */}
-      <main ref={cardRef} inert={!!sheet} style={{ width: "100%", maxWidth: 440, background: "var(--card)", border: "1px solid var(--line)", borderRadius: "var(--r-xl)", boxShadow: "var(--shadow-card)", overflow: "hidden", alignSelf: "flex-start" }}>
-        <header style={{ padding: "14px 16px 14px" }}>
-          {/* Club mark: projector beam + cinecom wordmark, lifted off the logo's yellow block.
-              Identity, not chrome — small, black, and quiet above the controls. */}
-          <h1 style={{ margin: "0 0 10px" }}>
-            <img src="/cinecom-mark.png" alt="씨네꼼 상영실 예약" width={104} height={39} style={{ display: "block" }} />
-          </h1>
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
-            <NavBtn label="이전 날짜" glyph="‹" onClick={() => setDateIdx((i) => Math.max(0, i - 1))} disabled={view === "week" || dateIdx === 0} />
-
-            {/* The date is the date-picker trigger (design's calendar affordance). */}
-            <button onClick={openPicker} className="datebtn" aria-label={`날짜 선택, 현재 ${day.md} ${day.wd}`} style={{ display: "flex", alignItems: "center", gap: 7, border: "none", background: "none", padding: "4px 8px", borderRadius: "var(--r-sm)", cursor: "pointer" }}>
-              <CalendarIcon />
-              {/* Centred, not left-aligned: the date is the widest thing here, so centring the
-                  block puts 수요일 on the date's own axis rather than against its left edge. */}
-              <span style={{ textAlign: "center" }}>
-                <span style={{ display: "block", font: `700 var(--text-xl)/1.15 var(--font-sans)`, letterSpacing: "-0.02em", color: "var(--ink)" }}>{day.md}</span>
-                <span style={{ display: "block", font: `500 var(--text-xs)/1.3 var(--font-sans)`, color: "var(--ink-faint)" }}>{day.wd}</span>
-              </span>
-            </button>
-            <input ref={dateInputRef} type="date" value={day.date} min={dates[0].date} max={dates[dates.length - 1].date} onChange={(e) => onDateInput(e.target.value)} tabIndex={-1} aria-hidden style={{ position: "absolute", opacity: 0, pointerEvents: "none", width: 0, height: 0 }} />
-
-            <NavBtn label="다음 날짜" glyph="›" onClick={() => setDateIdx((i) => Math.min(dates.length - 1, i + 1))} disabled={view === "week" || dateIdx === dates.length - 1} />
+      <main ref={cardRef} inert={!!sheet} className="card" style={{ width: "100%", background: "var(--card)", border: "1px solid var(--line)", borderRadius: "var(--r-xl)", boxShadow: "var(--shadow-card)", overflow: "hidden", display: "flex", flexDirection: "column", minHeight: 0 }}>
+        <header style={{ padding: "12px 16px 10px", flex: "none" }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, marginBottom: 8 }}>
+            {/* Club mark: projector beam + cinecom wordmark, lifted off the logo's yellow block.
+                Identity, not chrome — small, black, and quiet above the controls. */}
+            <h1 style={{ margin: 0 }}>
+              <img src="/cinecom-mark.png" alt="씨네꼼 상영실 예약" width={104} height={39} style={{ display: "block" }} />
+            </h1>
+            <AuthButton loggedIn={loggedIn} userName={userName} />
           </div>
-          <div style={{ display: "flex", justifyContent: "center", gap: 14 }}>
-            {/* Only the two states whose blocks carry no text need explaining. A 확인 필요
-                block literally says "확인 필요", so a legend entry for it was permanent chrome
-                teaching nothing — for something that appears about twice a year. */}
-            <Legend swatch={<DashSwatch />} text="예약가능" />
-            <Legend swatch={<Dot color="var(--accent)" />} text="예약됨" />
+
+          {/* Arrows sit next to the date, not pinned to the card's edges. Pinned, they read as
+              "previous/next screen"; grouped, they read as "step this date" — the relationship is
+              the point, and it's how Google Calendar, Fantastical and Cal.com all place them. The
+              legend that used to live under this row is gone: it cost a permanent line of vertical
+              space to teach two things the board already says (a filled block names who booked it;
+              a dashed empty box is the only tappable thing on the grid). */}
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 2 }}>
+            <NavBtn label="이전 날짜" glyph="‹" onClick={() => setDateIdx((i) => Math.max(0, i - 1))} disabled={view === "week" || dateIdx === 0} />
+            <DateField day={day} dates={dates} onPick={onDateInput} inputRef={dateInputRef} onOpen={openPicker} />
+            <NavBtn label="다음 날짜" glyph="›" onClick={() => setDateIdx((i) => Math.min(dates.length - 1, i + 1))} disabled={view === "week" || dateIdx === dates.length - 1} />
           </div>
         </header>
 
         {view === "day" ? (
           <>
-            <div style={{ display: "flex", padding: "0 12px" }}>
+            <div style={{ display: "flex", padding: "0 12px", flex: "none" }}>
               <div style={{ width: 44, flex: "none" }} />
               {ROOMS.map((r) => (
                 <h2 key={r} style={{ flex: 1, textAlign: "center", padding: "8px 0", margin: "0 3px", background: "var(--surface)", borderRadius: "var(--r-sm) var(--r-sm) 0 0", font: `700 var(--text-sm)/1.2 var(--font-sans)` }}>
@@ -322,7 +327,10 @@ export default function BookingBoard({ slots, dates, today, initialIdx, loggedIn
               ))}
             </div>
 
-            <div ref={scrollRef} style={{ height: 500, overflowY: "auto", background: "var(--surface)", margin: "0 12px", borderRadius: "0 0 var(--r-md) var(--r-md)" }}>
+            {/* flex:1 + minHeight:0 — the grid takes whatever height is left and scrolls inside it.
+                minHeight:0 is load-bearing: a flex item won't shrink below its content by default,
+                so without it the 1236px grid would push the card past the viewport. */}
+            <div ref={scrollRef} style={{ flex: 1, minHeight: 0, overflowY: "auto", background: "var(--surface)", margin: "0 12px", borderRadius: "0 0 var(--r-md) var(--r-md)" }}>
               <div style={{ display: "flex", position: "relative", height: GRID_H }}>
                 <div style={{ width: 44, flex: "none", position: "relative" }}>
                   {hourTicks().map((t) => (
@@ -359,7 +367,7 @@ export default function BookingBoard({ slots, dates, today, initialIdx, loggedIn
         )}
 
         {/* View switcher */}
-        <div style={{ display: "flex", gap: 8, padding: "14px 16px 16px" }}>
+        <div style={{ display: "flex", gap: 8, padding: "12px 16px 14px", flex: "none" }}>
           <Pill label="오늘" active={view === "day"} onClick={goToday} />
           <Pill label="이번주" active={view === "week"} onClick={() => setView("week")} />
         </div>
@@ -373,6 +381,7 @@ export default function BookingBoard({ slots, dates, today, initialIdx, loggedIn
             role="dialog"
             aria-modal="true"
             aria-label="예약글 작성"
+            tabIndex={-1} // focus target on open; not in the tab order itself
             style={{
               position: "fixed",
               left: 0,
@@ -449,7 +458,10 @@ export default function BookingBoard({ slots, dates, today, initialIdx, loggedIn
                   })}
                 </div>
               </div>
-              <Field id="movie" label="영화 제목" placeholder="예: 베로니카의 이중생활" value={sheet.movie} onChange={(v) => setSheet({ ...sheet, movie: v })} />
+              {/* Placeholder is 미정 because that is literally what an empty field posts — the
+                  title preview below already renders 미정. An example title implied the field was
+                  required and that a real one had to be invented; the club posts 미정 all the time. */}
+              <Field id="movie" label="영화 제목" placeholder="미정" value={sheet.movie} onChange={(v) => setSheet({ ...sheet, movie: v })} />
               {/* Mirrors the real post title — same family the cafe shows, not mono (no Hangul in mono). */}
               <p style={{ font: `500 var(--text-xs)/1.6 var(--font-sans)`, color: "var(--ink-muted)", background: "var(--page)", borderRadius: "var(--r-sm)", padding: "10px 12px", margin: "4px 0 14px", wordBreak: "keep-all" }}>
                 {preview(sheet)}
@@ -459,8 +471,12 @@ export default function BookingBoard({ slots, dates, today, initialIdx, loggedIn
                   {error}
                 </p>
               )}
-              <button onClick={submit} disabled={busy} className="primary" style={{ width: "100%", padding: 14, borderRadius: "var(--r-md)", border: "none", background: "var(--accent-ink)", color: "var(--on-accent)", font: `700 var(--text-sm) var(--font-sans)`, cursor: busy ? "default" : "pointer", opacity: busy ? 0.7 : 1 }}>
-                {busy ? "작성 중…" : loggedIn ? "예약글 작성" : "네이버로 로그인하고 예약글 작성"}
+              {/* Logged out, this IS the login button, so it wears Naver's green and mark: it's the
+                  one place the member hands credentials to Naver, and it's the screen 네아로 검수
+                  will be looking at. Logged in, login is over and it returns to our own accent. */}
+              <button onClick={submit} disabled={busy} className={loggedIn ? "primary" : "naverbtn"} style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 7, width: "100%", padding: 14, borderRadius: "var(--r-md)", border: "none", background: loggedIn ? "var(--accent-ink)" : "var(--naver)", color: "var(--on-accent)", font: `700 var(--text-sm) var(--font-sans)`, cursor: busy ? "default" : "pointer", opacity: busy ? 0.7 : 1 }}>
+                {!busy && !loggedIn && <NaverMark size={13} />}
+                {busy ? "작성 중…" : loggedIn ? "예약글 작성" : "네이버 아이디로 로그인"}
               </button>
             </div>
           </div>
@@ -468,6 +484,16 @@ export default function BookingBoard({ slots, dates, today, initialIdx, loggedIn
       )}
 
       <style>{`
+        /* Phone-first: the card IS the screen. On a desktop it stays a single centred column
+           rather than stretching two room columns across 1400px of empty space — but at 440×870
+           it read as a phone on a stretcher, so give it width to breathe and cap the height so a
+           tall monitor doesn't draw a ribbon. A real desktop layout is a horizontal week grid
+           (7 days × the time axis), which is a different build and not worth it while essentially
+           everyone books from a phone. */
+        .card { max-width: 440px; }
+        @media (min-width: 680px) and (min-height: 640px) {
+          .card { max-width: 560px; max-height: 860px; }
+        }
         .free-slot { transition: background var(--dur) var(--ease-out-quart), border-color var(--dur) var(--ease-out-quart); }
         .free-slot:hover { background: var(--accent-tint); border-color: var(--accent); }
         .free-slot:active { background: var(--accent-tint-strong); }
@@ -476,7 +502,13 @@ export default function BookingBoard({ slots, dates, today, initialIdx, loggedIn
         .nav:hover:not(:disabled) { background: var(--sunken); }
         /* Disabled via a real colour, not an opacity stack (which crushed contrast to 1.1:1). */
         .nav:disabled { color: var(--ink-disabled); background: var(--sunken); border-color: var(--line-soft); cursor: default; }
-        .datebtn:hover { background: var(--sunken); }
+        .datewrap:hover { background: var(--sunken); }
+        /* The real input is transparent, so its own focus ring would be invisible — put the ring
+           on the wrapper that's actually drawn. */
+        .datewrap:focus-within { outline: 2px solid var(--accent); outline-offset: 2px; }
+        .naverbtn { transition: filter var(--dur) var(--ease-out-quart); }
+        .naverbtn:hover { filter: brightness(0.93); }
+        .authbtn:hover { background: var(--sunken); }
         .weekrow { transition: background var(--dur) var(--ease-out-quart); }
         .weekrow:hover { background: var(--sunken); }
       `}</style>
@@ -489,7 +521,7 @@ export default function BookingBoard({ slots, dates, today, initialIdx, loggedIn
    a 12/18/24 scale. Rows are buttons: overview → tap → that day's detail. */
 function WeekView({ dates, slots, todayDate, onPickDate }: { dates: DayInfo[]; slots: UISlot[]; todayDate: string; onPickDate: (iso: string) => void }) {
   return (
-    <div style={{ maxHeight: 500, overflowY: "auto", padding: "4px 16px 8px" }}>
+    <div style={{ flex: 1, minHeight: 0, overflowY: "auto", padding: "4px 16px 8px" }}>
       <div style={{ display: "flex", gap: 8, paddingLeft: 60, marginBottom: 6 }}>
         {ROOMS.map((room) => (
           <div key={room} style={{ flex: 1 }}>
@@ -582,6 +614,76 @@ function CalendarIcon() {
   );
 }
 
+/**
+ * The date, doubling as the picker trigger.
+ *
+ * The input is a real, full-size element laid transparently over the visual rather than a 0×0
+ * `opacity:0` field driven by `showPicker()`. Safari refuses `showPicker()` on a zero-size input
+ * (and the old `.click()` fallback can't rescue one either), so the calendar did nothing on iPhone
+ * while Chrome's laxer handling made it look fine on Android. Given a real box, a plain tap opens
+ * the native picker with no JS at all, and `showPicker()` becomes a desktop convenience on top —
+ * where a click otherwise only opens the picker from the input's own tiny calendar glyph.
+ */
+function DateField({ day, dates, onPick, inputRef, onOpen }: { day: DayInfo; dates: DayInfo[]; onPick: (v: string) => void; inputRef: React.RefObject<HTMLInputElement | null>; onOpen: () => void }) {
+  return (
+    <span className="datewrap" style={{ position: "relative", display: "inline-flex", alignItems: "center", gap: 7, padding: "4px 8px", borderRadius: "var(--r-sm)" }}>
+      <CalendarIcon />
+      {/* Centred, not left-aligned: the date is the widest thing here, so centring the block puts
+          수요일 on the date's own axis rather than against its left edge. */}
+      <span style={{ textAlign: "center" }}>
+        <span style={{ display: "block", font: `700 var(--text-xl)/1.15 var(--font-sans)`, letterSpacing: "-0.02em", color: "var(--ink)" }}>{day.md}</span>
+        <span style={{ display: "block", font: `500 var(--text-xs)/1.3 var(--font-sans)`, color: "var(--ink-faint)" }}>{day.wd}</span>
+      </span>
+      <input
+        ref={inputRef}
+        type="date"
+        value={day.date}
+        min={dates[0].date}
+        max={dates[dates.length - 1].date}
+        onChange={(e) => onPick(e.target.value)}
+        onClick={onOpen}
+        aria-label={`날짜 선택, 현재 ${day.md} ${day.wd}`}
+        style={{ position: "absolute", inset: 0, width: "100%", height: "100%", opacity: 0, border: "none", padding: 0, margin: 0, background: "none", cursor: "pointer", WebkitAppearance: "none", appearance: "none" }}
+      />
+    </span>
+  );
+}
+
+/**
+ * Auth state, top-right — deliberately quiet in both states.
+ *
+ * Reading the board is the common case and needs no login at all; posting is the rare one, and the
+ * sheet's own CTA is the full Naver-green button that starts it. A saturated green button up here
+ * would be the loudest thing on a screen whose entire job is showing a schedule — the same mistake
+ * as the yellow 오늘 pill that pulled the eye off the calendar. So brand green appears exactly
+ * where the brand action is taken, and this stays a status readout you can act on.
+ */
+function AuthButton({ loggedIn, userName }: { loggedIn: boolean; userName: string | null }) {
+  if (loggedIn)
+    return (
+      <button onClick={() => signOut()} className="authbtn" style={{ display: "flex", alignItems: "center", gap: 6, minHeight: 36, padding: "0 10px", borderRadius: "var(--r-sm)", border: "1px solid var(--line)", background: "var(--surface)", font: `600 var(--text-xs) var(--font-sans)`, cursor: "pointer", maxWidth: 150 }}>
+        {/* The nickname is the point: posts appear under it, so it answers "who am I posting as?" */}
+        <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", color: "var(--ink)" }}>{userName ?? "로그인됨"}</span>
+        <span style={{ flex: "none", color: "var(--ink-faint)" }}>로그아웃</span>
+      </button>
+    );
+  return (
+    <button onClick={() => signIn("naver")} className="authbtn" style={{ display: "flex", alignItems: "center", gap: 5, minHeight: 36, padding: "0 11px", borderRadius: "var(--r-sm)", border: "1px solid var(--line)", background: "var(--surface)", color: "var(--ink)", font: `600 var(--text-xs) var(--font-sans)`, cursor: "pointer", whiteSpace: "nowrap" }}>
+      <NaverMark color="var(--naver)" />
+      로그인
+    </button>
+  );
+}
+
+/** Naver's N, drawn to their mark rather than approximated with a letter N in a box. */
+function NaverMark({ color = "#fff", size = 11 }: { color?: string; size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 20 20" aria-hidden style={{ flex: "none", display: "block" }}>
+      <path fill={color} d="M13.56 10.7 6.2 0H0v20h6.44V9.3L13.8 20H20V0h-6.44z" />
+    </svg>
+  );
+}
+
 function Pill({ label, active, onClick }: { label: string; active: boolean; onClick: () => void }) {
   return (
     // minHeight 44: the only controls that fell under the 44px touch target (they were 38).
@@ -599,40 +701,16 @@ function NavBtn({ label, glyph, onClick, disabled }: { label: string; glyph: str
   );
 }
 
-/**
- * A CSS dashed border can't render at legend size: an 8px box has only ~32px of perimeter,
- * the corner radii eat half of it, and Chrome's dash period (~3x border-width) is longer
- * than the straight run on each side — so it came out as 3-4 disconnected marks rather than
- * a dashed box. SVG lets us set the dash array explicitly and fit ~8 dashes around it.
- */
-function DashSwatch() {
-  return (
-    <svg width="10" height="10" viewBox="0 0 10 10" aria-hidden style={{ flex: "none", display: "block" }}>
-      <rect x="1" y="1" width="8" height="8" rx="1.5" fill="none" stroke="var(--free-border)" strokeWidth="1.2" strokeDasharray="2 1.6" />
-    </svg>
-  );
-}
-
-function Dot({ color }: { color: string }) {
-  return <span aria-hidden style={{ width: 8, height: 8, borderRadius: 2, background: color, display: "block", flex: "none" }} />;
-}
-
-function Legend({ swatch, text }: { swatch: React.ReactNode; text: string }) {
-  return (
-    <span style={{ display: "flex", alignItems: "center", gap: 5, font: `500 var(--text-xs)/1 var(--font-sans)`, color: "var(--ink-muted)" }}>
-      {swatch}
-      {text}
-    </span>
-  );
-}
-
 function TimeField({ id, label, value, onChange }: { id: string; label: string; value: string; onChange: (v: string) => void }) {
   return (
-    <div style={{ flex: 1 }}>
+    // minWidth 0: a flex item defaults to min-width:auto, so it refuses to shrink below its
+    // content's intrinsic width. iOS renders <input type=time> far wider than Chrome does, so the
+    // two fields wouldn't fit the row and overlapped. This lets them actually share the width.
+    <div style={{ flex: 1, minWidth: 0 }}>
       <label htmlFor={id} style={{ display: "block", font: `600 var(--text-xs) var(--font-sans)`, color: "var(--ink-muted)", marginBottom: 4 }}>
         {label}
       </label>
-      <input id={id} type="time" value={value} onChange={(e) => onChange(e.target.value)} style={{ width: "100%", boxSizing: "border-box", padding: "10px", borderRadius: "var(--r-sm)", border: "1px solid var(--line)", background: "var(--sunken)", font: `600 var(--text-base) var(--font-sans)`, color: "var(--ink)" }} />
+      <input id={id} type="time" value={value} onChange={(e) => onChange(e.target.value)} style={{ width: "100%", minWidth: 0, boxSizing: "border-box", padding: "10px", borderRadius: "var(--r-sm)", border: "1px solid var(--line)", background: "var(--sunken)", font: `600 var(--text-base) var(--font-sans)`, color: "var(--ink)" }} />
     </div>
   );
 }

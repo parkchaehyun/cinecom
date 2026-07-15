@@ -39,6 +39,14 @@
   --handle: rgba(0, 0, 0, 0.14); /* sheet grab handle */
   --ink-disabled: rgba(0, 0, 0, 0.5); /* disabled control glyph (exempt from AA) */
   --on-accent: #fff; /* text on --accent */
+  /* Naver's own brand green. Not ours to restyle — 네아로 review expects their BI, and members
+     recognise the button by this colour before they read it.
+     KNOWN, DELIBERATE AA EXCEPTION: white on this measures 2.25:1 against the 4.5:1 body-text
+     threshold, and axe flags it. It's unfixable without abandoning the brand — every green in the
+     AA-passing range (~#067c39 and darker) is visibly not Naver's, and the login button is the one
+     control where looking exactly like Naver's is the point. Confined to that button; nothing else
+     in the app is allowed near this colour. */
+  --naver: #03c75a;
   --booked-bg: #eef2ff;
   --booked-border: rgba(59, 110, 246, 0.3);
   --booked-ink: #1a2547;
@@ -95,6 +103,14 @@ body {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
   border-radius: 4px;
+}
+
+/* …except the sheet itself. It takes focus on open so screen readers announce it and the keyboard
+   lands inside, but it's a container, not a control: a ring around a sheet that just slid up says
+   nothing, and it drew a blue bar across the top edge. Focus rings belong on the things you act on,
+   which keep theirs. */
+[role="dialog"]:focus {
+  outline: none;
 }
 
 /* The sheet centres with `margin: 0 auto`, NOT translateX(-50%): an animated transform
