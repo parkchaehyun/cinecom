@@ -110,6 +110,19 @@ body {
   font-family: var(--font-sans);
 }
 
+/* iOS gives <input type="time"> a native control with its own intrinsic minimum width. It's a
+   replaced element, so when width:100% computes narrower than that minimum the control renders
+   wider than its own box and paints over the field beside it — which is why 시작/종료 "overlapped"
+   rather than merely looking cramped, and why min-width:0 (which only frees the wrapper to shrink)
+   did nothing. Dropping the native appearance drops the minimum with it; the field is then sized
+   by our CSS alone. The picker is unaffected — the input is still type=time, so tapping still
+   opens the OS wheel. Chrome never had the minimum, which is exactly why it never showed the bug. */
+input[type="time"] {
+  -webkit-appearance: none;
+  appearance: none;
+  min-width: 0;
+}
+
 /* Visible, consistent keyboard focus everywhere. */
 :focus-visible {
   outline: 2px solid var(--accent);

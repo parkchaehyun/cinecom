@@ -465,7 +465,10 @@ export default function BookingBoard({ slots, dates, today, initialIdx, loggedIn
                   {sheet.room} · {sheet.day.md} {sheet.day.wd}
                 </p>
               </div>
-              <div style={{ display: "flex", gap: 8, marginBottom: 10 }}>
+              {/* flexWrap is the safety net, not the fix: if a native time control still refuses to
+                  shrink on some device I can't test, the fields stack onto two lines instead of
+                  painting over each other. Wrapping is ugly; overlapping is broken. */}
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 10 }}>
                 <TimeField id="start" label="시작" value={fmt(sheet.startMin)} onChange={setStart} />
                 <TimeField id="end" label="종료" value={fmt(Math.min(sheet.endMin, 1439))} onChange={(v) => setSheet({ ...sheet, endMin: parseTime(v) })} />
               </div>
@@ -795,10 +798,11 @@ function NavBtn({ label, glyph, onClick, disabled }: { label: string; glyph: str
 
 function TimeField({ id, label, value, onChange }: { id: string; label: string; value: string; onChange: (v: string) => void }) {
   return (
-    // minWidth 0: a flex item defaults to min-width:auto, so it refuses to shrink below its
-    // content's intrinsic width. iOS renders <input type=time> far wider than Chrome does, so the
-    // two fields wouldn't fit the row and overlapped. This lets them actually share the width.
-    <div style={{ flex: 1, minWidth: 0 }}>
+    // flex-basis 130px + minWidth 0: the basis is what lets the row wrap instead of overlapping if
+    // the control won't shrink (two of them plus the 8px gap fit any phone ≥ 304px). minWidth:0
+    // frees the wrapper from min-width:auto. Neither is the real fix for iOS — see the
+    // input[type=time] rule in globals.css; the native control's own minimum was the culprit.
+    <div style={{ flex: "1 1 130px", minWidth: 0 }}>
       <label htmlFor={id} style={{ display: "block", font: `600 var(--text-xs) var(--font-sans)`, color: "var(--ink-muted)", marginBottom: 4 }}>
         {label}
       </label>
