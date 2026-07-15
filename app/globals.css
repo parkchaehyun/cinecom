@@ -1,26 +1,107 @@
 @import "tailwindcss";
 
+/* ── Design tokens ─────────────────────────────────────────────────────────
+   Palette is the approved Claude Design direction (preserved deliberately).
+   Everything the board draws comes from here — no hard-coded values downstream. */
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  /* Surfaces */
+  --page: #f0eee9;
+  --card: #faf9f6;
+  --surface: #ffffff;
+  --sunken: #f7f6f3;
+  --line: rgba(0, 0, 0, 0.07);
+  --line-soft: rgba(0, 0, 0, 0.05);
+  --grid-line: rgba(0, 0, 0, 0.045);
+
+  /* Ink */
+  --ink: #1a1a1a;
+  --ink-muted: rgba(0, 0, 0, 0.55);
+  --ink-faint: rgba(0, 0, 0, 0.45);
+
+  /* Accent + state (contrast-checked against their own backgrounds) */
+  --accent: #3b6ef6;
+  --accent-press: #2a55c9;
+  --booked-bg: #eef2ff;
+  --booked-border: rgba(59, 110, 246, 0.3);
+  --booked-ink: #1a2547;
+  --booked-meta: #1d4ed8; /* 6.9:1 on --booked-bg (was #3b6ef6 at 4.0:1) */
+  --review-bg: #fef6e7;
+  --review-border: #b45309;
+  --review-ink: #6b3d05;
+  --review-meta: #92400e;
+  --free-border: rgba(0, 0, 0, 0.22);
+
+  /* Type scale — 4 committed steps, 2:1 range (was 7 sizes inside 1.7:1) */
+  --text-xs: 0.75rem; /* 12px — ticks, legend, block meta */
+  --text-sm: 0.875rem; /* 14px — block titles, room headers, labels */
+  --text-base: 1rem; /* 16px — inputs (also stops iOS zoom-on-focus), sheet title */
+  --text-xl: 1.5rem; /* 24px — the date, the one anchor */
+
+  /* Radii */
+  --r-sm: 8px;
+  --r-md: 12px;
+  --r-lg: 16px;
+  --r-xl: 22px;
+
+  /* Elevation */
+  --shadow-card: 0 8px 28px rgba(0, 0, 0, 0.08);
+  --shadow-sheet: 0 -8px 30px rgba(0, 0, 0, 0.14);
+
+  /* Z scale — semantic, no magic numbers */
+  --z-backdrop: 40;
+  --z-sheet: 50;
+
+  /* Motion */
+  --ease-out-quart: cubic-bezier(0.25, 1, 0.5, 1);
+  --dur: 200ms;
 }
 
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --font-sans: "Pretendard Variable", Pretendard, -apple-system, BlinkMacSystemFont,
+    system-ui, sans-serif;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+html,
+body {
+  height: 100%;
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background: var(--page);
+  color: var(--ink);
+  font-family: var(--font-sans);
+}
+
+/* Visible, consistent keyboard focus everywhere. */
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+@keyframes sheet-in {
+  from {
+    transform: translateY(100%);
+  }
+  to {
+    transform: translateY(0);
+  }
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
 }

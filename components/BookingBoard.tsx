@@ -1,0 +1,399 @@
+"use client";
+
+import { useEffect, useRef, useState } from "react";
+import type { DayInfo, UISlot } from "@/lib/types";
+import { addDays, mondayOf } from "@/lib/dates";
+
+const ROOMS = ["대상영실", "소상영실"] as const;
+const DAY_START = 540; // 09:00
+const DAY_END = 1440; // 24:00
+const SPAN = DAY_END - DAY_START;
+const PXPM = 0.85; // pixels per minute (day view)
+const PAD_TOP = 10; // keeps the 09:00 tick off the top edge
+const PAD_BOTTOM = 12;
+const GRID_H = SPAN * PXPM + PAD_TOP + PAD_BOTTOM;
+const DEFAULT_DUR = 120;
+const MIN_GAP = 20; // gaps shorter than this aren't worth offering
+const MIN_BOOKING = 30;
+const WEEK_TICKS = [720, 1080, 1440]; // 12:00 / 18:00 / 24:00 — enough to read "is the evening free?"
+
+const pad = (n: number) => String(n).padStart(2, "0");
+const fmt = (min: number) => `${pad(Math.floor(min / 60))}:${pad(min % 60)}`;
+const parseTime = (t: string) => {
+  const [h, m] = t.split(":").map(Number);
+  return h * 60 + m;
+};
+const y = (min: number) => (min - DAY_START) * PXPM + PAD_TOP;
+const pct = (min: number) => ((min - DAY_START) / SPAN) * 100;
+
+// Cancelled bookings are never drawn — in either view the slot is genuinely free again.
+const live = (s: UISlot) => s.status !== "canceled";
+
+type Item = { kind: "free"; startMin: number; endMin: number } | { kind: "slot"; slot: UISlot };
+
+function buildItems(daySlots: UISlot[]): Item[] {
+  const occ = daySlots.filter(live).sort((a, b) => a.startMin - b.startMin);
+  const items: Item[] = [];
+  let cursor = DAY_START;
+  for (const s of occ) {
+    if (s.startMin - cursor >= MIN_GAP) items.push({ kind: "free", startMin: cursor, endMin: s.startMin });
+    items.push({ kind: "slot", slot: s });
+    cursor = Math.max(cursor, s.endMin);
+  }
+  if (DAY_END - cursor >= MIN_GAP) items.push({ kind: "free", startMin: cursor, endMin: DAY_END });
+  return items;
+}
+
+interface Sheet {
+  room: string;
+  day: DayInfo;
+  startMin: number;
+  endMin: number;
+  movie: string;
+  person: string;
+}
+
+export default function BookingBoard({ slots, dates, today, initialIdx }: { slots: UISlot[]; dates: DayInfo[]; today: string; initialIdx: number }) {
+  const [local, setLocal] = useState<UISlot[]>(slots);
+  const [dateIdx, setDateIdx] = useState(initialIdx);
+  const [view, setView] = useState<"day" | "week">("day");
+  const [sheet, setSheet] = useState<Sheet | null>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const dateInputRef = useRef<HTMLInputElement>(null);
+  const day = dates[dateIdx];
+
+  const roomSlots = (date: string, room: string) => local.filter((s) => s.date === date && s.room === room);
+
+  // Open the grid where the day actually happens (bookings are overwhelmingly evening).
+  useEffect(() => {
+    if (view !== "day") return;
+    const el = scrollRef.current;
+    if (!el) return;
+    const today = local.filter((s) => s.date === day.date && live(s));
+    const first = today.length ? Math.min(...today.map((s) => s.startMin)) : 17 * 60;
+    el.scrollTop = Math.max(0, y(first - 60) - PAD_TOP);
+    // Re-anchor on day/view change only, not on every local edit.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [day.date, view]);
+
+  useEffect(() => {
+    if (!sheet) return;
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && setSheet(null);
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [sheet]);
+
+  function openPicker() {
+    const el = dateInputRef.current;
+    if (!el) return;
+    if (typeof el.showPicker === "function") {
+      try {
+        el.showPicker();
+        return;
+      } catch {
+        /* fall through to focus */
+      }
+    }
+    el.focus();
+    el.click();
+  }
+
+  function onDateInput(value: string) {
+    if (!value) return;
+    let idx = dates.findIndex((d) => d.date === value);
+    if (idx < 0) idx = value < dates[0].date ? 0 : dates.length - 1;
+    setDateIdx(idx);
+    setView("day");
+  }
+
+  function openFrom(e: React.MouseEvent<HTMLButtonElement>, room: string, gapStart: number, gapEnd: number) {
+    // Keyboard activation (detail 0) has no pointer position → start at the gap.
+    let start = gapStart;
+    if (e.detail > 0) {
+      const rect = e.currentTarget.getBoundingClientRect();
+      start = Math.round((gapStart + (e.clientY - rect.top) / PXPM) / 10) * 10;
+    }
+    start = Math.max(gapStart, Math.min(start, Math.max(gapStart, gapEnd - MIN_BOOKING)));
+    setSheet({ room, day, startMin: start, endMin: Math.min(start + DEFAULT_DUR, gapEnd), movie: "", person: "" });
+  }
+
+  const preview = (s: Sheet) =>
+    `${s.day.md} ${s.day.wd} / ${s.room} / ${fmt(s.startMin)} - ${fmt(s.endMin)}` +
+    `${s.person ? ` / ${s.person}` : ""} / ${s.movie || "미정"}`;
+
+  function submit() {
+    if (!sheet) return;
+    setLocal((prev) => [
+      ...prev,
+      { date: sheet.day.date, room: sheet.room, startMin: sheet.startMin, endMin: sheet.endMin, movie: sheet.movie || null, person: sheet.person || null, status: "booked" },
+    ]);
+    setSheet(null);
+  }
+
+  const todayIdx = dates.findIndex((d) => d.date === today);
+  function goToday() {
+    setView("day");
+    setDateIdx(todayIdx >= 0 ? todayIdx : 0);
+  }
+
+  // `dates` spans a month, so slice the Mon–Sun week containing the selected day for the week view.
+  const weekDates = Array.from({ length: 7 }, (_, i) => addDays(mondayOf(day.date), i))
+    .map((iso) => dates.find((d) => d.date === iso))
+    .filter((d): d is DayInfo => !!d);
+
+  function pickDate(iso: string) {
+    const i = dates.findIndex((d) => d.date === iso);
+    if (i >= 0) setDateIdx(i);
+    setView("day");
+  }
+
+  return (
+    <div style={{ minHeight: "100dvh", background: "var(--page)", display: "flex", justifyContent: "center", padding: "20px 12px" }}>
+      <div style={{ width: "100%", maxWidth: 440, background: "var(--card)", border: "1px solid var(--line)", borderRadius: "var(--r-xl)", boxShadow: "var(--shadow-card)", overflow: "hidden", alignSelf: "flex-start" }}>
+        <header style={{ padding: "14px 16px 14px" }}>
+          {/* Club mark: projector beam + cinecom wordmark, lifted off the logo's yellow block.
+              Identity, not chrome — small, black, and quiet above the controls. */}
+          <img src="/cinecom-mark.png" alt="씨네꼼" width={104} height={39} style={{ display: "block", marginBottom: 10 }} />
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
+            <NavBtn label="이전 날짜" glyph="‹" onClick={() => setDateIdx((i) => Math.max(0, i - 1))} disabled={view === "week" || dateIdx === 0} />
+
+            {/* The date is the date-picker trigger (design's calendar affordance). */}
+            <button onClick={openPicker} className="datebtn" aria-label={`날짜 선택, 현재 ${day.md} ${day.wd}`} style={{ display: "flex", alignItems: "center", gap: 7, border: "none", background: "none", padding: "4px 8px", borderRadius: "var(--r-sm)", cursor: "pointer" }}>
+              <CalendarIcon />
+              <span style={{ textAlign: "left" }}>
+                <span style={{ display: "block", font: `700 var(--text-xl)/1.15 var(--font-sans)`, letterSpacing: "-0.02em", color: "var(--ink)" }}>{day.md}</span>
+                <span style={{ display: "block", font: `500 var(--text-xs)/1.3 var(--font-sans)`, color: "var(--ink-faint)" }}>{day.wd}</span>
+              </span>
+            </button>
+            <input ref={dateInputRef} type="date" value={day.date} min={dates[0].date} max={dates[dates.length - 1].date} onChange={(e) => onDateInput(e.target.value)} tabIndex={-1} aria-hidden style={{ position: "absolute", opacity: 0, pointerEvents: "none", width: 0, height: 0 }} />
+
+            <NavBtn label="다음 날짜" glyph="›" onClick={() => setDateIdx((i) => Math.min(dates.length - 1, i + 1))} disabled={view === "week" || dateIdx === dates.length - 1} />
+          </div>
+          <div style={{ display: "flex", justifyContent: "center", gap: 14 }}>
+            <Legend border={`1.5px dashed var(--free-border)`} text="예약가능" />
+            <Legend bg="var(--accent)" text="예약됨" />
+            <Legend bg="var(--review-border)" text="확인 필요" />
+          </div>
+        </header>
+
+        {view === "day" ? (
+          <>
+            <div style={{ display: "flex", padding: "0 12px" }}>
+              <div style={{ width: 44, flex: "none" }} />
+              {ROOMS.map((r) => (
+                <h2 key={r} style={{ flex: 1, textAlign: "center", padding: "8px 0", margin: "0 3px", background: "var(--surface)", borderRadius: "var(--r-sm) var(--r-sm) 0 0", font: `700 var(--text-sm)/1.2 var(--font-sans)` }}>
+                  {r}
+                </h2>
+              ))}
+            </div>
+
+            <div ref={scrollRef} style={{ height: 500, overflowY: "auto", background: "var(--surface)", margin: "0 12px", borderRadius: "0 0 var(--r-md) var(--r-md)" }}>
+              <div style={{ display: "flex", position: "relative", height: GRID_H }}>
+                <div style={{ width: 44, flex: "none", position: "relative" }}>
+                  {hourTicks().map((t) => (
+                    <div key={t.label} style={{ position: "absolute", left: 0, right: 6, top: t.top, textAlign: "right", font: `500 var(--text-xs)/1 ui-monospace, Menlo, monospace`, color: "var(--ink-faint)", transform: "translateY(-50%)" }}>
+                      {t.label}
+                    </div>
+                  ))}
+                </div>
+
+                {ROOMS.map((room) => (
+                  <div key={room} style={{ flex: 1, position: "relative", borderLeft: "1px solid var(--line-soft)" }}>
+                    {hourTicks().map((t) => (
+                      <div key={t.label} aria-hidden style={{ position: "absolute", left: 0, right: 0, top: t.top, borderTop: "1px solid var(--grid-line)" }} />
+                    ))}
+                    {buildItems(roomSlots(day.date, room)).map((item) =>
+                      item.kind === "free" ? (
+                        <button key={`f${item.startMin}`} onClick={(e) => openFrom(e, room, item.startMin, item.endMin)} aria-label={`${room} ${fmt(item.startMin)}부터 ${fmt(item.endMin)}까지 예약 가능`} className="free-slot" style={{ position: "absolute", left: 4, right: 4, top: y(item.startMin), height: (item.endMin - item.startMin) * PXPM, borderRadius: "var(--r-sm)", border: "1.5px dashed var(--free-border)", background: "transparent", padding: "6px 8px", textAlign: "left", cursor: "pointer", overflow: "hidden", display: "block" }}>
+                          <span style={{ font: `600 var(--text-xs)/1.3 var(--font-sans)`, color: "var(--ink-muted)" }}>예약가능</span>
+                        </button>
+                      ) : (
+                        <SlotBlock key={`s${item.slot.startMin}`} slot={item.slot} />
+                      ),
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          </>
+        ) : (
+          <WeekView dates={weekDates} slots={local} todayDate={today} onPickDate={pickDate} />
+        )}
+
+        {/* View switcher */}
+        <div style={{ display: "flex", gap: 8, padding: "14px 16px 16px" }}>
+          <Pill label="오늘" active={view === "day"} onClick={goToday} />
+          <Pill label="이번주" active={view === "week"} onClick={() => setView("week")} />
+        </div>
+      </div>
+
+      {sheet && (
+        <>
+          <div onClick={() => setSheet(null)} style={{ position: "fixed", inset: 0, background: "rgba(20,18,14,.32)", zIndex: "var(--z-backdrop)" as unknown as number, animation: `fade-in var(--dur) var(--ease-out-quart)` }} />
+          <div role="dialog" aria-modal="true" aria-label="예약글 작성" style={{ position: "fixed", left: "50%", bottom: 0, transform: "translateX(-50%)", width: "100%", maxWidth: 440, zIndex: "var(--z-sheet)" as unknown as number, animation: `sheet-in var(--dur) var(--ease-out-quart)` }}>
+            <div style={{ background: "var(--surface)", borderRadius: "var(--r-lg) var(--r-lg) 0 0", boxShadow: "var(--shadow-sheet)", padding: "16px 18px 22px" }}>
+              <div aria-hidden style={{ width: 32, height: 4, borderRadius: 2, background: "rgba(0,0,0,.14)", margin: "0 auto 14px" }} />
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 4 }}>
+                <h2 style={{ font: `700 var(--text-base) var(--font-sans)`, margin: 0 }}>예약글 작성</h2>
+                <button onClick={() => setSheet(null)} aria-label="닫기" style={{ width: 44, height: 44, marginRight: -10, borderRadius: "var(--r-sm)", border: "none", background: "transparent", color: "var(--ink-muted)", cursor: "pointer", fontSize: 16 }}>
+                  ✕
+                </button>
+              </div>
+              <p style={{ font: `500 var(--text-xs) var(--font-sans)`, color: "var(--ink-muted)", margin: "0 0 14px" }}>
+                {sheet.room} · {sheet.day.md} {sheet.day.wd}
+              </p>
+              <div style={{ display: "flex", gap: 8, marginBottom: 10 }}>
+                <TimeField id="start" label="시작" value={fmt(sheet.startMin)} onChange={(v) => setSheet({ ...sheet, startMin: parseTime(v) })} />
+                <TimeField id="end" label="종료" value={fmt(Math.min(sheet.endMin, 1439))} onChange={(v) => setSheet({ ...sheet, endMin: parseTime(v) })} />
+              </div>
+              <Field id="movie" label="영화 제목" placeholder="예: 베로니카의 이중생활" value={sheet.movie} onChange={(v) => setSheet({ ...sheet, movie: v })} />
+              <Field id="person" label="이름 (선택)" placeholder="비워두면 제목에서 생략됩니다" value={sheet.person} onChange={(v) => setSheet({ ...sheet, person: v })} />
+              {/* Mirrors the real post title — same family the cafe shows, not mono (no Hangul in mono). */}
+              <p style={{ font: `500 var(--text-xs)/1.6 var(--font-sans)`, color: "var(--ink-muted)", background: "var(--page)", borderRadius: "var(--r-sm)", padding: "10px 12px", margin: "4px 0 14px", wordBreak: "keep-all" }}>
+                {preview(sheet)}
+              </p>
+              <button onClick={submit} className="primary" style={{ width: "100%", padding: 14, borderRadius: "var(--r-md)", border: "none", background: "var(--accent)", color: "#fff", font: `700 var(--text-sm) var(--font-sans)`, cursor: "pointer" }}>
+                네이버로 예약글 작성
+              </button>
+            </div>
+          </div>
+        </>
+      )}
+
+      <style>{`
+        .free-slot { transition: background var(--dur) var(--ease-out-quart), border-color var(--dur) var(--ease-out-quart); }
+        .free-slot:hover { background: rgba(59,110,246,.06); border-color: var(--accent); }
+        .free-slot:active { background: rgba(59,110,246,.12); }
+        .primary { transition: background var(--dur) var(--ease-out-quart); }
+        .primary:hover { background: var(--accent-press); }
+        .nav:hover:not(:disabled) { background: var(--sunken); }
+        /* Disabled via a real colour, not an opacity stack (which crushed contrast to 1.1:1). */
+        .nav:disabled { color: rgba(0,0,0,.5); background: var(--sunken); border-color: var(--line-soft); cursor: default; }
+        .datebtn:hover { background: var(--sunken); }
+        .weekrow { transition: background var(--dur) var(--ease-out-quart); }
+        .weekrow:hover { background: var(--sunken); }
+      `}</style>
+    </div>
+  );
+}
+
+/* ── Week overview: 7 days × 2 room tracks ─────────────────────────────────
+   Density alone can't answer "is Thursday *evening* free?", so the tracks carry
+   a 12/18/24 scale. Rows are buttons: overview → tap → that day's detail. */
+function WeekView({ dates, slots, todayDate, onPickDate }: { dates: DayInfo[]; slots: UISlot[]; todayDate: string; onPickDate: (iso: string) => void }) {
+  return (
+    <div style={{ maxHeight: 500, overflowY: "auto", padding: "4px 16px 8px" }}>
+      <div style={{ display: "flex", gap: 8, paddingLeft: 60, marginBottom: 6 }}>
+        {ROOMS.map((room) => (
+          <div key={room} style={{ flex: 1 }}>
+            <div style={{ textAlign: "center", font: `700 var(--text-xs)/1.4 var(--font-sans)`, color: "var(--ink-muted)" }}>{room}</div>
+            <div style={{ position: "relative", height: 12 }}>
+              {WEEK_TICKS.map((t) => (
+                <span key={t} style={{ position: "absolute", left: `${pct(t)}%`, transform: "translateX(-100%)", font: `500 9px/1 ui-monospace, Menlo, monospace`, color: "var(--ink-faint)" }}>
+                  {Math.floor(t / 60)}
+                </span>
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {dates.map((d) => (
+        <button key={d.date} onClick={() => onPickDate(d.date)} className="weekrow" aria-label={`${d.md} ${d.wd} 자세히 보기`} style={{ display: "flex", alignItems: "center", gap: 8, width: "100%", padding: "9px 4px", border: "none", borderBottom: "1px solid var(--line-soft)", background: "none", cursor: "pointer", borderRadius: "var(--r-sm)" }}>
+          <span style={{ width: 56, flex: "none", textAlign: "left" }}>
+            <span style={{ display: "block", font: `700 var(--text-xs)/1.2 var(--font-sans)`, color: d.date === todayDate ? "var(--accent)" : "var(--ink)", whiteSpace: "nowrap" }}>{d.md}</span>
+            <span style={{ display: "block", font: `500 9px/1.3 var(--font-sans)`, color: "var(--ink-faint)" }}>{d.wd}</span>
+          </span>
+          {ROOMS.map((room) => (
+            <span key={room} style={{ flex: 1, height: 18, borderRadius: 5, background: "var(--sunken)", position: "relative", overflow: "hidden", display: "block" }}>
+              {WEEK_TICKS.slice(0, -1).map((t) => (
+                <span key={t} aria-hidden style={{ position: "absolute", top: 0, bottom: 0, left: `${pct(t)}%`, borderLeft: "1px solid var(--grid-line)" }} />
+              ))}
+              {slots
+                .filter((s) => s.date === d.date && s.room === room && live(s))
+                .map((s, k) => (
+                  <span key={k} style={{ position: "absolute", top: 0, bottom: 0, left: `${pct(s.startMin)}%`, width: `${Math.max(1.2, ((s.endMin - s.startMin) / SPAN) * 100)}%`, background: s.status === "needs_review" ? "var(--review-border)" : "var(--accent)" }} />
+                ))}
+            </span>
+          ))}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function SlotBlock({ slot }: { slot: UISlot }) {
+  const review = slot.status === "needs_review";
+  return (
+    <div style={{ position: "absolute", left: 4, right: 4, top: y(slot.startMin), height: Math.max(26, (slot.endMin - slot.startMin) * PXPM), borderRadius: "var(--r-sm)", padding: "6px 8px", boxSizing: "border-box", overflow: "hidden", background: review ? "var(--review-bg)" : "var(--booked-bg)", border: review ? "1.5px dashed var(--review-border)" : "1px solid var(--booked-border)" }}>
+      <div style={{ font: `700 var(--text-sm)/1.3 var(--font-sans)`, color: review ? "var(--review-ink)" : "var(--booked-ink)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+        {slot.movie || (slot.person ? `${slot.person} (제목 미확인)` : "미정")}
+      </div>
+      <div style={{ font: `500 var(--text-xs)/1.4 var(--font-sans)`, color: review ? "var(--review-meta)" : "var(--booked-meta)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+        {review ? "확인 필요" : "예약됨"} · {fmt(slot.startMin)}–{fmt(slot.endMin)}
+      </div>
+    </div>
+  );
+}
+
+function hourTicks() {
+  const out: { label: string; top: number }[] = [];
+  for (let h = 9; h <= 24; h++) out.push({ label: `${pad(h)}:00`, top: y(h * 60) });
+  return out;
+}
+
+function CalendarIcon() {
+  return (
+    <svg width="13" height="14" viewBox="0 0 13 14" fill="none" aria-hidden style={{ flex: "none" }}>
+      <rect x="0.75" y="2.75" width="11.5" height="10.5" rx="2" stroke="var(--ink-faint)" strokeWidth="1.5" />
+      <path d="M3.5 0.75v3M9.5 0.75v3M0.75 6.25h11.5" stroke="var(--ink-faint)" strokeWidth="1.5" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+function Pill({ label, active, onClick }: { label: string; active: boolean; onClick: () => void }) {
+  return (
+    <button onClick={onClick} aria-pressed={active} style={{ flex: 1, padding: "11px 0", borderRadius: "var(--r-md)", border: "none", background: active ? "var(--ink)" : "rgba(0,0,0,.05)", color: active ? "var(--surface)" : "var(--ink-muted)", font: `700 var(--text-sm) var(--font-sans)`, cursor: "pointer" }}>
+      {label}
+    </button>
+  );
+}
+
+function NavBtn({ label, glyph, onClick, disabled }: { label: string; glyph: string; onClick: () => void; disabled: boolean }) {
+  return (
+    <button onClick={onClick} disabled={disabled} aria-label={label} className="nav" style={{ width: 44, height: 44, flex: "none", borderRadius: "50%", border: "1px solid var(--line)", background: "var(--surface)", color: "var(--ink)", fontSize: 18, lineHeight: 1, cursor: "pointer" }}>
+      {glyph}
+    </button>
+  );
+}
+
+function Legend({ bg, border, text }: { bg?: string; border?: string; text: string }) {
+  return (
+    <span style={{ display: "flex", alignItems: "center", gap: 5, font: `500 var(--text-xs)/1 var(--font-sans)`, color: "var(--ink-muted)" }}>
+      <span aria-hidden style={{ width: 8, height: 8, borderRadius: 2, background: bg ?? "transparent", border: border ?? "none", display: "inline-block" }} />
+      {text}
+    </span>
+  );
+}
+
+function TimeField({ id, label, value, onChange }: { id: string; label: string; value: string; onChange: (v: string) => void }) {
+  return (
+    <div style={{ flex: 1 }}>
+      <label htmlFor={id} style={{ display: "block", font: `600 var(--text-xs) var(--font-sans)`, color: "var(--ink-muted)", marginBottom: 4 }}>
+        {label}
+      </label>
+      <input id={id} type="time" value={value} onChange={(e) => onChange(e.target.value)} style={{ width: "100%", boxSizing: "border-box", padding: "10px", borderRadius: "var(--r-sm)", border: "1px solid var(--line)", background: "var(--sunken)", font: `600 var(--text-base) var(--font-sans)`, color: "var(--ink)" }} />
+    </div>
+  );
+}
+
+function Field({ id, label, placeholder, value, onChange }: { id: string; label: string; placeholder: string; value: string; onChange: (v: string) => void }) {
+  return (
+    <div style={{ marginBottom: 10 }}>
+      <label htmlFor={id} style={{ display: "block", font: `600 var(--text-xs) var(--font-sans)`, color: "var(--ink-muted)", marginBottom: 4 }}>
+        {label}
+      </label>
+      <input id={id} placeholder={placeholder} value={value} onChange={(e) => onChange(e.target.value)} style={{ width: "100%", boxSizing: "border-box", padding: "11px 12px", borderRadius: "var(--r-sm)", border: "1px solid var(--line)", background: "var(--sunken)", font: `500 var(--text-base) var(--font-sans)`, color: "var(--ink)" }} />
+    </div>
+  );
+}
