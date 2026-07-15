@@ -64,7 +64,6 @@ interface Sheet {
   /** Where the free gap ends (next booking, or midnight) — bounds the duration chips. */
   maxEnd: number;
   movie: string;
-  person: string;
 }
 
 export default function BookingBoard({ slots, dates, today, initialIdx, loggedIn }: { slots: UISlot[]; dates: DayInfo[]; today: string; initialIdx: number; loggedIn: boolean }) {
@@ -135,7 +134,7 @@ export default function BookingBoard({ slots, dates, today, initialIdx, loggedIn
     }
     // Snapping can land outside the gap, so the gap always wins.
     start = Math.max(gapStart, Math.min(start, Math.max(gapStart, gapEnd - MIN_BOOKING)));
-    setSheet({ room, day, startMin: start, endMin: Math.min(start + DEFAULT_DUR, gapEnd), maxEnd: gapEnd, movie: "", person: "" });
+    setSheet({ room, day, startMin: start, endMin: Math.min(start + DEFAULT_DUR, gapEnd), maxEnd: gapEnd, movie: "" });
   }
 
   /** Editing the start MOVES the booking (duration held); editing the end RESIZES it. */
@@ -147,8 +146,7 @@ export default function BookingBoard({ slots, dates, today, initialIdx, loggedIn
   }
 
   const preview = (s: Sheet) =>
-    `${s.day.md} ${s.day.wd} / ${s.room} / ${fmt(s.startMin)} - ${fmt(s.endMin)}` +
-    `${s.person ? ` / ${s.person}` : ""} / ${s.movie || "미정"}`;
+    `${s.day.md} ${s.day.wd} / ${s.room} / ${fmt(s.startMin)} - ${fmt(s.endMin)} / ${s.movie || "미정"}`;
 
   async function submit() {
     if (!sheet || busy) return;
@@ -164,7 +162,6 @@ export default function BookingBoard({ slots, dates, today, initialIdx, loggedIn
           startMin: sheet.startMin,
           endMin: sheet.endMin,
           movie: sheet.movie,
-          person: sheet.person,
         }),
       });
       if (res.status === 401) {
@@ -339,7 +336,6 @@ export default function BookingBoard({ slots, dates, today, initialIdx, loggedIn
                 </div>
               </div>
               <Field id="movie" label="영화 제목" placeholder="예: 베로니카의 이중생활" value={sheet.movie} onChange={(v) => setSheet({ ...sheet, movie: v })} />
-              <Field id="person" label="이름 (선택)" placeholder="비워두면 제목에서 생략됩니다" value={sheet.person} onChange={(v) => setSheet({ ...sheet, person: v })} />
               {/* Mirrors the real post title — same family the cafe shows, not mono (no Hangul in mono). */}
               <p style={{ font: `500 var(--text-xs)/1.6 var(--font-sans)`, color: "var(--ink-muted)", background: "var(--page)", borderRadius: "var(--r-sm)", padding: "10px 12px", margin: "4px 0 14px", wordBreak: "keep-all" }}>
                 {preview(sheet)}
