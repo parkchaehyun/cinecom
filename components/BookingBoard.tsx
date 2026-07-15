@@ -253,6 +253,11 @@ export default function BookingBoard({ slots, dates, today, initialIdx, loggedIn
   async function submit() {
     if (!sheet || busy) return;
     if (needsConsent) return reconsent();
+    // Logged out: go straight to Naver. We already know the answer, so POSTing first only bought a
+    // round trip to be told 401 — and it flashed "작성 중…" while doing it, claiming to write a
+    // post when it was really about to leave for a login screen. The 401 branch below still
+    // covers the case this can't: a session that expired after the page rendered.
+    if (!loggedIn) return void signIn("naver", { callbackUrl: window.location.href });
     setBusy(true);
     setError(null);
     try {
