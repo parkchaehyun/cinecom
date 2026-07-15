@@ -5,13 +5,16 @@ import { useRouter } from "next/navigation";
 import { signIn } from "next-auth/react";
 import type { DayInfo, UISlot } from "@/lib/types";
 import { addDays, mondayOf } from "@/lib/dates";
+import { dayBlocks, type DayBlock } from "@/lib/occupancy";
 
 const ROOMS = ["대상영실", "소상영실"] as const;
-const DAY_START = 540; // 09:00
+// The full day: the club books overnight (22:30-25:30) and pre-dawn (01:00-04:00 마라톤),
+// so a 09:00-start grid rendered those above the top edge and showed booked time as free.
+const DAY_START = 0;
 const DAY_END = 1440; // 24:00
 const SPAN = DAY_END - DAY_START;
 const PXPM = 0.85; // pixels per minute (day view)
-const PAD_TOP = 10; // keeps the 09:00 tick off the top edge
+const PAD_TOP = 10; // keeps the 00:00 tick off the top edge
 const PAD_BOTTOM = 12;
 const GRID_H = SPAN * PXPM + PAD_TOP + PAD_BOTTOM;
 const DEFAULT_DUR = 120;
@@ -21,7 +24,7 @@ const SNAP = 30; // tap-to-place granularity — 81% of real bookings already st
 // Durations members actually book: these four cover 91% of 231 real bookings (2h alone is 46%).
 // The native time picker still handles the other 9%.
 const DURATIONS = [90, 120, 150, 180];
-const WEEK_TICKS = [720, 1080, 1440]; // 12:00 / 18:00 / 24:00 — enough to read "is the evening free?"
+const WEEK_TICKS = [360, 720, 1080, 1440]; // 6 / 12 / 18 / 24 — enough to read "is the evening free?"
 
 const pad = (n: number) => String(n).padStart(2, "0");
 const fmt = (min: number) => `${pad(Math.floor(min / 60))}:${pad(min % 60)}`;
@@ -38,19 +41,15 @@ const parseTime = (t: string) => {
 const y = (min: number) => (min - DAY_START) * PXPM + PAD_TOP;
 const pct = (min: number) => ((min - DAY_START) / SPAN) * 100;
 
-// Cancelled bookings are never drawn — in either view the slot is genuinely free again.
-const live = (s: UISlot) => s.status !== "canceled";
+type Item = { kind: "free"; startMin: number; endMin: number } | { kind: "block"; block: DayBlock };
 
-type Item = { kind: "free"; startMin: number; endMin: number } | { kind: "slot"; slot: UISlot };
-
-function buildItems(daySlots: UISlot[]): Item[] {
-  const occ = daySlots.filter(live).sort((a, b) => a.startMin - b.startMin);
+function buildItems(blocks: DayBlock[]): Item[] {
   const items: Item[] = [];
   let cursor = DAY_START;
-  for (const s of occ) {
-    if (s.startMin - cursor >= MIN_GAP) items.push({ kind: "free", startMin: cursor, endMin: s.startMin });
-    items.push({ kind: "slot", slot: s });
-    cursor = Math.max(cursor, s.endMin);
+  for (const b of blocks) {
+    if (b.from - cursor >= MIN_GAP) items.push({ kind: "free", startMin: cursor, endMin: b.from });
+    items.push({ kind: "block", block: b });
+    cursor = Math.max(cursor, b.to);
   }
   if (DAY_END - cursor >= MIN_GAP) items.push({ kind: "free", startMin: cursor, endMin: DAY_END });
   return items;
@@ -81,16 +80,16 @@ export default function BookingBoard({ slots, dates, today, initialIdx, loggedIn
   // Adopt fresh server data after router.refresh() (e.g. once a new post is ingested).
   useEffect(() => setLocal(slots), [slots]);
 
-  const roomSlots = (date: string, room: string) => local.filter((s) => s.date === date && s.room === room);
-
-  // Open the grid where the day actually happens (bookings are overwhelmingly evening).
+  // The grid spans the whole 24h for correctness, but 00:00-08:00 is nearly always empty
+  // (3 bookings in 232), so anchor on the day's first booking — or 09:00 on an empty day,
+  // which is where bookings actually start. Tails from an overnight booking count.
   useEffect(() => {
     if (view !== "day") return;
     const el = scrollRef.current;
     if (!el) return;
-    const today = local.filter((s) => s.date === day.date && live(s));
-    const first = today.length ? Math.min(...today.map((s) => s.startMin)) : 17 * 60;
-    el.scrollTop = Math.max(0, y(first - 60) - PAD_TOP);
+    const blocks = ROOMS.flatMap((r) => dayBlocks(day.date, r, local));
+    const anchor = blocks.length ? Math.min(...blocks.map((b) => b.from)) - 60 : 9 * 60;
+    el.scrollTop = Math.max(0, y(anchor) - PAD_TOP);
     // Re-anchor on day/view change only, not on every local edit.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [day.date, view]);
@@ -255,13 +254,13 @@ export default function BookingBoard({ slots, dates, today, initialIdx, loggedIn
                     {hourTicks().map((t) => (
                       <div key={t.label} aria-hidden style={{ position: "absolute", left: 0, right: 0, top: t.top, borderTop: "1px solid var(--grid-line)" }} />
                     ))}
-                    {buildItems(roomSlots(day.date, room)).map((item) =>
+                    {buildItems(dayBlocks(day.date, room, local)).map((item) =>
                       item.kind === "free" ? (
                         <button key={`f${item.startMin}`} onClick={(e) => openFrom(e, room, item.startMin, item.endMin)} aria-label={`${room} ${fmt(item.startMin)}부터 ${fmt(item.endMin)}까지 예약 가능`} className="free-slot" style={{ position: "absolute", left: 4, right: 4, top: y(item.startMin), height: (item.endMin - item.startMin) * PXPM, borderRadius: "var(--r-sm)", border: "1.5px dashed var(--free-border)", background: "transparent", padding: "6px 8px", textAlign: "left", cursor: "pointer", overflow: "hidden", display: "block" }}>
                           <span style={{ font: `600 var(--text-xs)/1.3 var(--font-sans)`, color: "var(--ink-muted)" }}>예약가능</span>
                         </button>
                       ) : (
-                        <SlotBlock key={`s${item.slot.startMin}`} slot={item.slot} />
+                        <SlotBlock key={`s${item.block.slot.date}-${item.block.from}`} block={item.block} />
                       ),
                     )}
                   </div>
@@ -402,11 +401,9 @@ function WeekView({ dates, slots, todayDate, onPickDate }: { dates: DayInfo[]; s
               {WEEK_TICKS.slice(0, -1).map((t) => (
                 <span key={t} aria-hidden style={{ position: "absolute", top: 0, bottom: 0, left: `${pct(t)}%`, borderLeft: "1px solid var(--grid-line)" }} />
               ))}
-              {slots
-                .filter((s) => s.date === d.date && s.room === room && live(s))
-                .map((s, k) => (
-                  <span key={k} style={{ position: "absolute", top: 0, bottom: 0, left: `${pct(s.startMin)}%`, width: `${Math.max(1.2, ((s.endMin - s.startMin) / SPAN) * 100)}%`, background: s.status === "needs_review" ? "var(--review-border)" : "var(--accent)" }} />
-                ))}
+              {dayBlocks(d.date, room, slots).map((b, k) => (
+                <span key={k} style={{ position: "absolute", top: 0, bottom: 0, left: `${pct(b.from)}%`, width: `${Math.max(1.2, ((b.to - b.from) / SPAN) * 100)}%`, background: b.slot.status === "needs_review" ? "var(--review-border)" : "var(--accent)" }} />
+              ))}
             </span>
           ))}
         </button>
@@ -415,14 +412,36 @@ function WeekView({ dates, slots, todayDate, onPickDate }: { dates: DayInfo[]; s
   );
 }
 
-function SlotBlock({ slot }: { slot: UISlot }) {
+function SlotBlock({ block }: { block: DayBlock }) {
+  const { slot, from, to, continuedPrev, continuesNext } = block;
   const review = slot.status === "needs_review";
+  const r = "var(--r-sm)";
   return (
-    <div style={{ position: "absolute", left: 4, right: 4, top: y(slot.startMin), height: Math.max(26, (slot.endMin - slot.startMin) * PXPM), borderRadius: "var(--r-sm)", padding: "6px 8px", boxSizing: "border-box", overflow: "hidden", background: review ? "var(--review-bg)" : "var(--booked-bg)", border: review ? "1.5px dashed var(--review-border)" : "1px solid var(--booked-border)" }}>
+    <div
+      style={{
+        position: "absolute",
+        left: 4,
+        right: 4,
+        // Positioned by the block's place in THIS day; an overnight booking is clipped at
+        // midnight here and continues as a tail on the next day.
+        top: y(from),
+        height: Math.max(26, (to - from) * PXPM),
+        // Square off the edge that runs into the adjacent day, so it reads as continuing.
+        borderRadius: `${continuedPrev ? "0 0" : `${r} ${r}`} ${continuesNext ? "0 0" : `${r} ${r}`}`,
+        padding: "6px 8px",
+        boxSizing: "border-box",
+        overflow: "hidden",
+        background: review ? "var(--review-bg)" : "var(--booked-bg)",
+        border: review ? "1.5px dashed var(--review-border)" : "1px solid var(--booked-border)",
+      }}
+    >
       <div style={{ font: `700 var(--text-sm)/1.3 var(--font-sans)`, color: review ? "var(--review-ink)" : "var(--booked-ink)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-        {slot.movie || (slot.person ? `${slot.person} (제목 미확인)` : "미정")}
+        {continuedPrev ? "↳ " : ""}
+        {slot.movie ?? "미정"}
       </div>
       <div style={{ font: `500 var(--text-xs)/1.4 var(--font-sans)`, color: review ? "var(--review-meta)" : "var(--booked-meta)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+        {/* Always the times the club actually wrote (22:30–25:30), not the clipped ones —
+            25:30 reads as one continuous evening; 01:30 would look like a typo. */}
         {review ? "확인 필요" : "예약됨"} · {fmt(slot.startMin)}–{fmt(slot.endMin)}
       </div>
     </div>
@@ -431,7 +450,7 @@ function SlotBlock({ slot }: { slot: UISlot }) {
 
 function hourTicks() {
   const out: { label: string; top: number }[] = [];
-  for (let h = 9; h <= 24; h++) out.push({ label: `${pad(h)}:00`, top: y(h * 60) });
+  for (let h = 0; h <= 24; h++) out.push({ label: `${pad(h)}:00`, top: y(h * 60) });
   return out;
 }
 

@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { getSlots } from "@/lib/slots";
+import { findClash } from "@/lib/occupancy";
+import { addDays } from "@/lib/dates";
 import { buildTitle } from "@/lib/title";
 import { DEFAULT_MENU_ID, postArticle } from "@/lib/naver";
 import { runIngest } from "@/lib/ingest";
@@ -37,14 +39,20 @@ export async function POST(req: Request) {
 
   // The cafe is the source of truth and we cannot lock a slot, so re-check as late as
   // possible: someone may have posted between the board loading and this submit.
-  const taken = (await getSlots(date, date)).find(
-    (s) => s.room === room && s.startMin < endMin && startMin < s.endMin,
-  );
-  if (taken) {
+  // Widen the window by a day either side — the club books overnight (22:30-25:30), so a
+  // booking from YESTERDAY can still occupy this morning, and a request past midnight
+  // reaches into tomorrow. A same-date-only check silently allows both.
+  const context = await getSlots(addDays(date, -1), addDays(date, 1));
+  const clash = findClash(date, room, startMin, endMin, context);
+  if (clash) {
     return NextResponse.json(
       {
         error: "이미 예약된 시간과 겹칩니다.",
-        conflict: { movie: taken.movie, startMin: taken.startMin, endMin: taken.endMin },
+        conflict: {
+          movie: clash.slot.movie,
+          startMin: clash.slot.startMin,
+          endMin: clash.slot.endMin,
+        },
       },
       { status: 409 },
     );
