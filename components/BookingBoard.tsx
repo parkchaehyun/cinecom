@@ -241,10 +241,12 @@ export default function BookingBoard({ slots, dates, today, initialIdx, loggedIn
   /**
    * Re-run Naver consent so the member can tick 카페, which they declined at login.
    *
-   * auth_type=reprompt asks Naver to show the consent screen again rather than silently reusing
-   * the existing grant — without it, Naver can hand back the same scope-less token and the member
-   * loops forever on the same error with no way out. If Naver ignores the parameter this still
-   * degrades to an ordinary re-login, which is no worse than where they already are.
+   * auth_type=reprompt makes Naver show the consent screen again rather than silently reusing the
+   * existing grant — without it Naver hands back the same scope-less token and the member loops
+   * forever on the same error with no way out. Verified end-to-end against a real account that had
+   * declined 카페: the consent screen reappears with 카페 tickable, and the write then succeeds.
+   * (developers.naver.com is unreachable from CI, and probing authorize() proves nothing — Naver
+   * returns 200 for a bogus auth_type too — so this behaviour rests on that manual test.)
    */
   function reconsent() {
     signIn("naver", { callbackUrl: window.location.href }, { auth_type: "reprompt" });
