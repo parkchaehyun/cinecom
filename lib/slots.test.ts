@@ -3,6 +3,7 @@ import { rowToSlot, type SlotRow } from "./slots";
 import { findClash } from "./occupancy";
 
 const row = (p: Partial<SlotRow>): SlotRow => ({
+  article_id: 8115,
   room: "대상영실",
   date: "2026-06-05",
   start_min: 19 * 60,
@@ -29,6 +30,13 @@ describe("rowToSlot — who booked it", () => {
 
   it("survives a missing post rather than throwing", () => {
     expect(rowToSlot(row({ person: null, posts: null }))?.who).toBeNull();
+  });
+
+  // The board links every block to cafe.naver.com/cinecom/{articleId}. That link is the only route
+  // to cancelling a booking — Naver's Cafe API can't delete — so losing the id silently would
+  // strand members with no way back to their own post.
+  it("carries the article id through, so the block can link to the source post", () => {
+    expect(rowToSlot(row({ article_id: 8115 }))?.articleId).toBe(8115);
   });
 });
 

@@ -494,6 +494,11 @@ export default function BookingBoard({ slots, dates, today, initialIdx, loggedIn
         @media (min-width: 680px) and (min-height: 640px) {
           .card { max-width: 560px; max-height: 860px; }
         }
+        /* Booked blocks are links to the cafe post. No underline or link colour — the block is
+           already a distinct object, and 24 blue underlined titles would wreck the grid. */
+        .slot-link { transition: filter var(--dur) var(--ease-out-quart); }
+        .slot-link:hover { filter: brightness(0.965); }
+        .slot-link:active { filter: brightness(0.93); }
         .free-slot { transition: background var(--dur) var(--ease-out-quart), border-color var(--dur) var(--ease-out-quart); }
         .free-slot:hover { background: var(--accent-tint); border-color: var(--accent); }
         .free-slot:active { background: var(--accent-tint-strong); }
@@ -559,12 +564,28 @@ function WeekView({ dates, slots, todayDate, onPickDate }: { dates: DayInfo[]; s
   );
 }
 
+/**
+ * A booked block, linking to the cafe post it was parsed from.
+ *
+ * This is also the only honest answer to "let me cancel my booking". Naver's Cafe API has exactly
+ * two endpoints — join a cafe, and write an article — so there is no delete or edit to call, and
+ * nothing that maps a Naver account to its per-cafe nickname, so the app cannot even tell which
+ * bookings are yours. Both problems dissolve here: tap through and Naver's own UI shows 삭제/수정
+ * on your posts and not on anyone else's, enforced by Naver rather than guessed at by us. It's
+ * useful for everyone else too — "who booked this and why" is one tap from the block.
+ */
 function SlotBlock({ block }: { block: DayBlock }) {
   const { slot, from, to, continuedPrev, continuesNext } = block;
   const review = slot.status === "needs_review";
   const r = "var(--r-sm)";
+  const when = `${fmt(slot.startMin)}부터 ${slot.endAssumed ? "종료 시간 미상" : `${fmt(slot.endMin)}까지`}`;
   return (
-    <div
+    <a
+      href={`https://cafe.naver.com/cinecom/${slot.articleId}`}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="slot-link"
+      aria-label={`${slot.movie ?? "미정"}, ${slot.who ?? "예약됨"}, ${when}. 카페 원글 열기`}
       style={{
         position: "absolute",
         left: 4,
@@ -580,6 +601,8 @@ function SlotBlock({ block }: { block: DayBlock }) {
         overflow: "hidden",
         background: review ? "var(--review-bg)" : "var(--booked-bg)",
         border: review ? "1.5px dashed var(--review-border)" : "1px solid var(--booked-border)",
+        display: "block",
+        textDecoration: "none",
       }}
     >
       <div style={{ font: `700 var(--text-sm)/1.3 var(--font-sans)`, color: review ? "var(--review-ink)" : "var(--booked-ink)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
@@ -593,7 +616,7 @@ function SlotBlock({ block }: { block: DayBlock }) {
         {review ? "확인 필요" : (slot.who ?? "예약됨")} · {fmt(slot.startMin)}–
         {slot.endAssumed ? "?" : fmt(slot.endMin)}
       </div>
-    </div>
+    </a>
   );
 }
 
@@ -661,8 +684,13 @@ function DateField({ day, dates, onPick, inputRef, onOpen }: { day: DayInfo; dat
 function AuthButton({ loggedIn, userName }: { loggedIn: boolean; userName: string | null }) {
   if (loggedIn)
     return (
-      <button onClick={() => signOut()} className="authbtn" style={{ display: "flex", alignItems: "center", gap: 6, minHeight: 36, padding: "0 10px", borderRadius: "var(--r-sm)", border: "1px solid var(--line)", background: "var(--surface)", font: `600 var(--text-xs) var(--font-sans)`, cursor: "pointer", maxWidth: 150 }}>
-        {/* The nickname is the point: posts appear under it, so it answers "who am I posting as?" */}
+      <button onClick={() => signOut()} className="authbtn" style={{ display: "flex", alignItems: "center", gap: 5, minHeight: 36, padding: "0 10px", borderRadius: "var(--r-sm)", border: "1px solid var(--line)", background: "var(--surface)", font: `600 var(--text-xs) var(--font-sans)`, cursor: "pointer", maxWidth: 160 }}>
+        {/* The N is load-bearing, not decoration: this is the NAVER account's 별명, which is NOT
+            the cafe nickname the post will appear under — Naver keeps those separate and exposes
+            no way to read the cafe one. So the mark frames it as "the Naver account you're signed
+            in with", which is all it can honestly claim, and which is the thing worth catching
+            (signing in with the wrong account of two). */}
+        <NaverMark color="var(--naver)" size={10} />
         <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", color: "var(--ink)" }}>{userName ?? "로그인됨"}</span>
         <span style={{ flex: "none", color: "var(--ink-faint)" }}>로그아웃</span>
       </button>

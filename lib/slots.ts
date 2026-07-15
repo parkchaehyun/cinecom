@@ -2,6 +2,7 @@ import { supabaseAdmin } from "./supabase";
 import { ROOMS, type UISlot } from "./types";
 
 export interface SlotRow {
+  article_id: number;
   room: string;
   date: string;
   start_min: number | null;
@@ -36,7 +37,7 @@ export async function getSlots(from: string, to: string): Promise<UISlot[]> {
     .from("slots")
     // writer_nick comes from the post itself and is always present, unlike the name in the
     // title (only 11% of slots) — so it's the reliable answer to "who booked this?".
-    .select("room, date, start_min, end_min, movie, person, needs_review, posts(writer_nick)")
+    .select("article_id, room, date, start_min, end_min, movie, person, needs_review, posts(writer_nick)")
     .eq("canceled", false)
     .in("room", ROOMS as unknown as string[])
     .gte("date", from)
@@ -54,6 +55,7 @@ export function rowToSlot(r: SlotRow): UISlot | null {
   if (r.start_min === null) return null;
   const endAssumed = r.end_min === null;
   return {
+    articleId: r.article_id,
     date: r.date,
     room: r.room,
     startMin: r.start_min,

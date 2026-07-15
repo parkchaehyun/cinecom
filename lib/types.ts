@@ -20,6 +20,8 @@ export interface RawPost {
 export type SlotStatus = "booked" | "needs_review" | "canceled";
 
 export interface UISlot {
+  /** The cafe post this showing was parsed out of — the board links back to it. */
+  articleId: number;
   date: string; // YYYY-MM-DD (KST)
   room: string;
   startMin: number;

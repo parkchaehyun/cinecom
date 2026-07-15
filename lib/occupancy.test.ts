@@ -3,6 +3,7 @@ import { dayBlocks, findClash } from "./occupancy";
 import type { UISlot } from "./types";
 
 const slot = (p: Partial<UISlot>): UISlot => ({
+  articleId: 1,
   date: "2026-05-08",
   room: "대상영실",
   startMin: 19 * 60,
