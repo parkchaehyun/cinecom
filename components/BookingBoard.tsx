@@ -680,19 +680,26 @@ function DateField({ day, dates, onPick, inputRef, onOpen }: { day: DayInfo; dat
  * would be the loudest thing on a screen whose entire job is showing a schedule — the same mistake
  * as the yellow 오늘 pill that pulled the eye off the calendar. So brand green appears exactly
  * where the brand action is taken, and this stays a status readout you can act on.
+ *
+ * The nickname renders only if Naver actually sends one, and we ask for nothing by default. It's
+ * the NAVER account's 별명, not the cafe nickname the post appears under — Naver keeps those
+ * separate and exposes no way to read the cafe one — and most people have never looked at their
+ * 별명, so for many members it would show an unfamiliar auto-generated string that is neither
+ * their name nor their cafe name. Absent, the button says the one true thing: you're logged in.
  */
 function AuthButton({ loggedIn, userName }: { loggedIn: boolean; userName: string | null }) {
   if (loggedIn)
     return (
       <button onClick={() => signOut()} className="authbtn" style={{ display: "flex", alignItems: "center", gap: 5, minHeight: 36, padding: "0 10px", borderRadius: "var(--r-sm)", border: "1px solid var(--line)", background: "var(--surface)", font: `600 var(--text-xs) var(--font-sans)`, cursor: "pointer", maxWidth: 160 }}>
-        {/* The N is load-bearing, not decoration: this is the NAVER account's 별명, which is NOT
-            the cafe nickname the post will appear under — Naver keeps those separate and exposes
-            no way to read the cafe one. So the mark frames it as "the Naver account you're signed
-            in with", which is all it can honestly claim, and which is the thing worth catching
-            (signing in with the wrong account of two). */}
-        <NaverMark color="var(--naver)" size={10} />
-        <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", color: "var(--ink)" }}>{userName ?? "로그인됨"}</span>
-        <span style={{ flex: "none", color: "var(--ink-faint)" }}>로그아웃</span>
+        {userName && (
+          <>
+            {/* The N frames it as "the Naver account you're signed in with" — all it can honestly
+                claim, since it isn't the cafe identity. */}
+            <NaverMark color="var(--naver)" size={10} />
+            <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", color: "var(--ink)" }}>{userName}</span>
+          </>
+        )}
+        <span style={{ flex: "none", color: userName ? "var(--ink-faint)" : "var(--ink)" }}>로그아웃</span>
       </button>
     );
   return (
