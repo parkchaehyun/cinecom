@@ -604,10 +604,11 @@ export default function BookingBoard({ slots, dates, today, initialIdx, loggedIn
                   })}
                 </div>
               </div>
-              {/* Required now, so the placeholder is an example again rather than 미정: 미정 was
-                  honest only while an empty field actually posted 미정. The room is free and the
-                  board is read by people deciding whether to come — "미정" tells them nothing. */}
-              <Field id="movie" label="영화 제목" placeholder="예: 베로니카의 이중생활" value={sheet.movie} onChange={(v) => setSheet({ ...sheet, movie: v })} />
+              {/* No placeholder: "영화 제목" is not ambiguous, so anything here is either the label
+                  again or an arbitrary film — and naming one implies the field wants that sort of
+                  film. Required-ness lives on the button, which says so and stays visible while
+                  you type; a placeholder would have said it only until you needed it. */}
+              <Field id="movie" label="영화 제목" value={sheet.movie} onChange={(v) => setSheet({ ...sheet, movie: v })} />
               {/* Only when there's a real choice — with one board this would be a control that
                   can't do anything, and the club's own numbers say 96% never leave the default.
                   A native select so it opens the OS picker and reads long 소모임 names properly;
@@ -635,8 +636,9 @@ export default function BookingBoard({ slots, dates, today, initialIdx, loggedIn
               )}
               {/* Optional everywhere, prefilled only where the club is unanimous. Members already
                   use it for both a person and a 소모임's name, so the label says both rather than
-                  pretending it's one. */}
-              <Field id="person" label="이름 · 소모임 (선택)" placeholder="비워두면 제목에서 빠집니다" value={sheet.person} onChange={(v) => setSheet({ ...sheet, person: v })} />
+                  pretending it's one — and "(선택)" already carries what the old placeholder tried
+                  to explain, without disappearing the moment someone starts typing. */}
+              <Field id="person" label="이름 · 소모임 (선택)" value={sheet.person} onChange={(v) => setSheet({ ...sheet, person: v })} />
               {/* Mirrors the real post title — same family the cafe shows, not mono (no Hangul in mono). */}
               <p style={{ font: `500 var(--text-xs)/1.6 var(--font-sans)`, color: "var(--ink-muted)", background: "var(--page)", borderRadius: "var(--r-sm)", padding: "10px 12px", margin: "4px 0 14px", wordBreak: "keep-all" }}>
                 {preview(sheet)}
@@ -969,7 +971,7 @@ function ClockIcon() {
   );
 }
 
-function Field({ id, label, placeholder, value, onChange }: { id: string; label: string; placeholder: string; value: string; onChange: (v: string) => void }) {
+function Field({ id, label, placeholder, value, onChange }: { id: string; label: string; placeholder?: string; value: string; onChange: (v: string) => void }) {
   return (
     <div style={{ marginBottom: 10 }}>
       <label htmlFor={id} style={{ display: "block", font: `600 var(--text-xs) var(--font-sans)`, color: "var(--ink-muted)", marginBottom: 4 }}>
