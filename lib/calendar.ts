@@ -115,7 +115,7 @@ export function buildCalendar(slots: UISlot[], generatedAt = new Date()): string
   for (const { slot, ordinal } of identified.sort((a, b) => slotOrder(a.slot, b.slot))) {
     const sourceUrl = `https://cafe.naver.com/cinecom/${slot.articleId}`;
     const review = slot.status === "needs_review";
-    const summary = `[${review ? "확인 필요 · " : ""}${slot.room}] ${slot.movie ?? "미정"}`;
+    const summary = `${slot.movie ?? "미정"} [${slot.room}${review ? " · 확인 필요" : ""}]`;
     const description = [
       review ? "상태: 원글 확인 필요" : null,
       slot.endAssumed ? "종료 시간: 원글에 없어 2시간으로 표시" : null,

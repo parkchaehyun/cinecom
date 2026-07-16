@@ -32,7 +32,7 @@ describe("buildCalendar", () => {
     expect(calendar).toContain("ORGANIZER:mailto:cinecom@chaepark.com\r\n");
     expect(calendar).toContain("DTSTART;TZID=Asia/Seoul:20260716T203000\r\n");
     expect(calendar).toContain("DTEND;TZID=Asia/Seoul:20260716T223000\r\n");
-    expect(calendar).toContain("SUMMARY;LANGUAGE=ko:[대상영실] 베로니카의 이중생활\r\n");
+    expect(calendar).toContain("SUMMARY;LANGUAGE=ko:베로니카의 이중생활 [대상영실]\r\n");
     expect(calendar).toContain("URL:https://cafe.naver.com/cinecom/8115\r\n");
     // Subscribing to the room board must not make every club booking block the member's time.
     expect(calendar).toContain("TRANSP:TRANSPARENT\r\n");
@@ -69,7 +69,7 @@ describe("buildCalendar", () => {
     const calendar = buildCalendar([slot({ movie, who: "홍길동, 수영모" })], generatedAt);
     const unfolded = unfold(calendar);
 
-    expect(unfolded).toContain(`SUMMARY;LANGUAGE=ko:[대상영실] ${"가".repeat(35)}\\, 세미\\;역슬래시\\\\줄\\n둘`);
+    expect(unfolded).toContain(`SUMMARY;LANGUAGE=ko:${"가".repeat(35)}\\, 세미\\;역슬래시\\\\줄\\n둘 [대상영실]`);
     expect(unfolded).toContain("DESCRIPTION;LANGUAGE=ko:카페 원글:");
     expect(unfolded).not.toContain("홍길동");
     for (const line of calendar.split("\r\n").filter(Boolean)) {
@@ -82,7 +82,7 @@ describe("buildCalendar", () => {
     const calendar = unfold(
       buildCalendar([slot({ status: "needs_review", endAssumed: true })], generatedAt),
     );
-    expect(calendar).toContain("SUMMARY;LANGUAGE=ko:[확인 필요 · 대상영실]");
+    expect(calendar).toContain("SUMMARY;LANGUAGE=ko:베로니카의 이중생활 [대상영실 · 확인 필요]");
     expect(calendar).toContain("상태: 원글 확인 필요\\n종료 시간: 원글에 없어 2시간으로 표시");
   });
 });
