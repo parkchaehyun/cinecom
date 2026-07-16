@@ -9,27 +9,28 @@ import { readFileSync } from "fs";
 
 const mark = readFileSync("public/cinecom-mark.png").toString("base64");
 
-// The mark and three words, on the app's own background. No subtitle: every card renders
-// og:description as text directly beneath the image, so a line inside it only says the same thing
-// twice — at a size nobody reads in a chat thread. And no yellow bar: brand for its own sake,
-// competing with the one thing the card has to carry.
+// The mark alone, on the app's own background.
+//
+// No Korean in the image. Every card renders og:title and og:description as text right beneath it,
+// so "상영실 예약" here made it the third printing of the same phrase (image + og:title +
+// og:site_name). It also forced a type pairing that doesn't exist: the wordmark is a typewriter
+// face and the app is set in Pretendard, a geometric sans — a century apart, and it showed. A
+// Korean serif (Nanum Myeongjo pairs the best of the four I rendered) would have made the
+// repetition prettier rather than absent, at the cost of a third family for one image.
+//
+// The image is never displayed without the title, so it doesn't have to carry the words. It
+// carries the identity; the title carries the meaning.
 const html = `<!doctype html><html lang="ko"><head><meta charset="utf-8">
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable.min.css">
 <style>
   * { margin: 0; box-sizing: border-box; }
   body {
-    width: 1200px; height: 630px; display: flex; flex-direction: column;
-    align-items: center; justify-content: center; gap: 30px;
+    width: 1200px; height: 630px; display: flex;
+    align-items: center; justify-content: center;
     background: #f0eee9;
-    font-family: "Pretendard Variable", Pretendard, sans-serif;
   }
-  img { width: 460px; display: block; }
-  h1 { font-size: 96px; font-weight: 700; letter-spacing: -0.03em; color: #1a1a1a; line-height: 1; }
+  img { width: 640px; display: block; }
 </style></head>
-<body>
-  <img src="data:image/png;base64,${mark}" alt="">
-  <h1>상영실 예약</h1>
-</body></html>`;
+<body><img src="data:image/png;base64,${mark}" alt=""></body></html>`;
 
 const b = await puppeteer.launch({
   executablePath: "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",

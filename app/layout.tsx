@@ -2,7 +2,10 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 const TITLE = "씨네꼼 상영실 예약";
-const DESC = "대상영실·소상영실 예약 현황을 한눈에 보고, 빈 시간에 바로 예약글을 작성하세요.";
+// Every line of a share card should earn its place by saying something the others don't. The title
+// names the thing; this says what you get. "씨네꼼 상영실 예약" here would just be the title again,
+// printed twice — and the old sentence ran past what any card shows before truncating.
+const DESC = "대상영실·소상영실 예약 현황을 한눈에";
 
 export const metadata: Metadata = {
   // metadataBase is what turns app/opengraph-image.png into the absolute URL scrapers require —
@@ -15,7 +18,7 @@ export const metadata: Metadata = {
   openGraph: {
     type: "website",
     locale: "ko_KR",
-    siteName: TITLE,
+    siteName: "씨네꼼", // the club; TITLE is the page — identical values printed the same line twice
     title: TITLE,
     description: DESC,
     url: "/",
