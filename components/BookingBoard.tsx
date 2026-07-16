@@ -89,7 +89,20 @@ interface Sheet {
   movie: string;
   /** Which cafe board to post to. Defaults to 꼼인 상영실 예약, where 96% of reservations go. */
   menuId: number;
+  /** The optional name segment: a person, or a 소모임. Board-defaulted — see BOARD_PERSON. */
+  person: string;
 }
+
+/**
+ * Boards whose posts always carry the same name, so it's prefilled rather than retyped.
+ *
+ * From the club's own titles: 정기 영화 모임 is 4/4 수영모, unanimous. Nowhere else has a default —
+ * on 꼼인 상영실 예약 only 19 of 196 carry a name and they're individuals (박채현, 김서은…), and on
+ * the 소모임 boards the field is sometimes the 소모임's own name (호러 영화 소모임 signs its posts
+ * that way). So: prefilled where the club is unanimous, offered-but-empty everywhere else.
+ */
+const BOARD_PERSON: Record<number, string> = { 85: "수영모" };
+const personFor = (menuId: number) => BOARD_PERSON[menuId] ?? "";
 
 export default function BookingBoard({ slots, dates, today, initialIdx, loggedIn, userName, boards }: { slots: UISlot[]; dates: DayInfo[]; today: string; initialIdx: number; loggedIn: boolean; userName: string | null; boards: Board[] }) {
   const [local, setLocal] = useState<UISlot[]>(slots);
@@ -229,7 +242,7 @@ export default function BookingBoard({ slots, dates, today, initialIdx, loggedIn
     setError(null);
     // A gap running to midnight isn't the end of the night — the club books straight through it.
     const maxEnd = gapEnd === DAY_END ? overnightLimit(day.date, room, local) : gapEnd;
-    setSheet({ room, day, startMin: start, endMin: Math.min(start + DEFAULT_DUR, maxEnd), maxEnd, movie: "", menuId: DEFAULT_MENU_ID });
+    setSheet({ room, day, startMin: start, endMin: Math.min(start + DEFAULT_DUR, maxEnd), maxEnd, movie: "", menuId: DEFAULT_MENU_ID, person: personFor(DEFAULT_MENU_ID) });
   }
 
   /* Swipe-down-to-dismiss. Pointer events so mouse and touch share one path; the drag zone
@@ -278,8 +291,23 @@ export default function BookingBoard({ slots, dates, today, initialIdx, loggedIn
     setSheet({ ...sheet, endMin: t <= sheet.startMin ? t + 1440 : t });
   }
 
-  const preview = (s: Sheet) =>
-    `${s.day.md} ${s.day.wd} / ${s.room} / ${fmt(s.startMin)} - ${fmt(s.endMin)} / ${s.movie || "미정"}`;
+  /**
+   * Switching board carries the name along only while it's still that board's default. Type your
+   * own and it survives the switch; leave it untouched and it follows the board. Overwriting
+   * something a member actually typed would be the app deciding it knows better.
+   */
+  function setBoard(menuId: number) {
+    if (!sheet) return;
+    const untouched = sheet.person === personFor(sheet.menuId);
+    setSheet({ ...sheet, menuId, person: untouched ? personFor(menuId) : sheet.person });
+  }
+
+  // Mirrors lib/title.ts exactly — the name segment is dropped when blank, which is how ~90% of
+  // real titles look. If these two ever disagree, the preview is lying about what gets posted.
+  const preview = (s: Sheet) => {
+    const name = s.person.trim();
+    return `${s.day.md} ${s.day.wd} / ${s.room} / ${fmt(s.startMin)} - ${fmt(s.endMin)}${name ? ` / ${name}` : ""} / ${s.movie.trim() || "영화 제목"}`;
+  };
 
   /**
    * Re-run Naver consent so the member can tick 카페, which they declined at login.
@@ -315,6 +343,7 @@ export default function BookingBoard({ slots, dates, today, initialIdx, loggedIn
           startMin: sheet.startMin,
           endMin: sheet.endMin,
           movie: sheet.movie,
+          person: sheet.person,
           menuId: sheet.menuId,
         }),
       });
@@ -520,13 +549,10 @@ export default function BookingBoard({ slots, dates, today, initialIdx, loggedIn
                 {/* Grabbable padding around a 4px line — the visual stays hairline while the
                     target stays thumb-sized. */}
                 <div aria-hidden style={{ width: 40, height: 4, borderRadius: 2, background: "var(--handle)", margin: "0 auto 14px" }} />
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 4 }}>
-                  <h2 style={{ font: `700 var(--text-base) var(--font-sans)`, margin: 0 }}>예약글 작성</h2>
-                  {/* The close button sits inside the drag zone, so stop the gesture claiming its tap. */}
-                  <button onPointerDown={(e) => e.stopPropagation()} onClick={() => setSheet(null)} aria-label="닫기" style={{ width: 44, height: 44, marginRight: -10, borderRadius: "var(--r-sm)", border: "none", background: "transparent", color: "var(--ink-muted)", cursor: "pointer", fontSize: 16 }}>
-                    ✕
-                  </button>
-                </div>
+                {/* No ✕: the handle drags away, the backdrop closes on tap, Escape closes it for a
+                    keyboard, and VoiceOver's dismiss gesture maps to Escape — four ways out, so a
+                    fifth was just chrome sitting where the title should be. */}
+                <h2 style={{ font: `700 var(--text-base) var(--font-sans)`, margin: "0 0 4px" }}>예약글 작성</h2>
                 <p style={{ font: `500 var(--text-xs) var(--font-sans)`, color: "var(--ink-muted)", margin: "0 0 14px" }}>
                   {sheet.room} · {sheet.day.md} {sheet.day.wd}
                 </p>
@@ -578,10 +604,10 @@ export default function BookingBoard({ slots, dates, today, initialIdx, loggedIn
                   })}
                 </div>
               </div>
-              {/* Placeholder is 미정 because that is literally what an empty field posts — the
-                  title preview below already renders 미정. An example title implied the field was
-                  required and that a real one had to be invented; the club posts 미정 all the time. */}
-              <Field id="movie" label="영화 제목" placeholder="미정" value={sheet.movie} onChange={(v) => setSheet({ ...sheet, movie: v })} />
+              {/* Required now, so the placeholder is an example again rather than 미정: 미정 was
+                  honest only while an empty field actually posted 미정. The room is free and the
+                  board is read by people deciding whether to come — "미정" tells them nothing. */}
+              <Field id="movie" label="영화 제목" placeholder="예: 베로니카의 이중생활" value={sheet.movie} onChange={(v) => setSheet({ ...sheet, movie: v })} />
               {/* Only when there's a real choice — with one board this would be a control that
                   can't do anything, and the club's own numbers say 96% never leave the default.
                   A native select so it opens the OS picker and reads long 소모임 names properly;
@@ -596,7 +622,7 @@ export default function BookingBoard({ slots, dates, today, initialIdx, loggedIn
                       on Android and not on iPhone. A chevron is right here (unlike on the time
                       field): this genuinely is a list of options. */}
                   <span style={{ position: "relative", display: "block" }}>
-                    <select id="board" value={sheet.menuId} onChange={(e) => setSheet({ ...sheet, menuId: Number(e.target.value) })} className="board-select" style={{ width: "100%", boxSizing: "border-box", padding: "11px 32px 11px 12px", borderRadius: "var(--r-sm)", border: "1px solid var(--line)", background: "var(--sunken)", font: `500 var(--text-base) var(--font-sans)`, color: "var(--ink)", textOverflow: "ellipsis" }}>
+                    <select id="board" value={sheet.menuId} onChange={(e) => setBoard(Number(e.target.value))} className="board-select" style={{ width: "100%", boxSizing: "border-box", padding: "11px 32px 11px 12px", borderRadius: "var(--r-sm)", border: "1px solid var(--line)", background: "var(--sunken)", font: `500 var(--text-base) var(--font-sans)`, color: "var(--ink)", textOverflow: "ellipsis" }}>
                       {boards.map((b) => (
                         <option key={b.menuId} value={b.menuId}>
                           {b.menuName}
@@ -607,6 +633,10 @@ export default function BookingBoard({ slots, dates, today, initialIdx, loggedIn
                   </span>
                 </div>
               )}
+              {/* Optional everywhere, prefilled only where the club is unanimous. Members already
+                  use it for both a person and a 소모임's name, so the label says both rather than
+                  pretending it's one. */}
+              <Field id="person" label="이름 · 소모임 (선택)" placeholder="비워두면 제목에서 빠집니다" value={sheet.person} onChange={(v) => setSheet({ ...sheet, person: v })} />
               {/* Mirrors the real post title — same family the cafe shows, not mono (no Hangul in mono). */}
               <p style={{ font: `500 var(--text-xs)/1.6 var(--font-sans)`, color: "var(--ink-muted)", background: "var(--page)", borderRadius: "var(--r-sm)", padding: "10px 12px", margin: "4px 0 14px", wordBreak: "keep-all" }}>
                 {preview(sheet)}
@@ -623,10 +653,15 @@ export default function BookingBoard({ slots, dates, today, initialIdx, loggedIn
                 // Three states, one button: log in · re-consent to 카페 · post. The first two both
                 // hand off to Naver, so they wear Naver's green; only the last is our own action.
                 const toNaver = !loggedIn || needsConsent;
+                // A required field the button ignores isn't required. Blocked only on the posting
+                // step: making someone name the film before they're even allowed to log in would
+                // be gatekeeping the wrong door.
+                const noMovie = loggedIn && !needsConsent && !sheet.movie.trim();
+                const off = busy || noMovie;
                 return (
-                  <button onClick={submit} disabled={busy} className={toNaver ? "naverbtn" : "primary"} style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 7, width: "100%", padding: 14, borderRadius: "var(--r-md)", border: "none", background: toNaver ? "var(--naver)" : "var(--accent-ink)", color: "var(--on-accent)", font: `700 var(--text-sm) var(--font-sans)`, cursor: busy ? "default" : "pointer", opacity: busy ? 0.7 : 1 }}>
-                    {!busy && toNaver && <NaverMark size={13} />}
-                    {busy ? "작성 중…" : needsConsent ? "'카페' 동의하고 다시 시도" : loggedIn ? "예약글 작성" : "네이버 아이디로 로그인"}
+                  <button onClick={submit} disabled={off} className={toNaver ? "naverbtn" : "primary"} style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 7, width: "100%", padding: 14, borderRadius: "var(--r-md)", border: "none", background: noMovie ? "var(--sunken-strong)" : toNaver ? "var(--naver)" : "var(--accent-ink)", color: noMovie ? "var(--ink-faint)" : "var(--on-accent)", font: `700 var(--text-sm) var(--font-sans)`, cursor: off ? "default" : "pointer", opacity: busy ? 0.7 : 1 }}>
+                    {!busy && toNaver && !noMovie && <NaverMark size={13} />}
+                    {busy ? "작성 중…" : noMovie ? "영화 제목을 입력해 주세요" : needsConsent ? "'카페' 동의하고 다시 시도" : loggedIn ? "예약글 작성" : "네이버 아이디로 로그인"}
                   </button>
                 );
               })()}

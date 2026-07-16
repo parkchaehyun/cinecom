@@ -39,6 +39,9 @@ export async function POST(req: Request) {
   if (!room || !(ROOMS as readonly string[]).includes(room)) return bad("상영실이 올바르지 않습니다.");
   if (typeof startMin !== "number" || typeof endMin !== "number") return bad("시간이 올바르지 않습니다.");
   if (endMin <= startMin) return bad("종료 시간이 시작 시간보다 빨라요.");
+  // Required, and enforced here rather than only on a disabled button: the board is how members
+  // decide whether to come, and "미정" tells them nothing about a room that's being held for free.
+  if (!b.movie?.trim()) return bad("영화 제목을 입력해 주세요.");
 
   // Never take the client's word for the board. The select only offers reservation boards, but the
   // request is just JSON — without this, anything could be posted to 운영 공지 under a member's own
