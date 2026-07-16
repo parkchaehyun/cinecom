@@ -435,7 +435,17 @@ export default function BookingBoard({ slots, dates, today, initialIdx, loggedIn
                 <img src="/cinecom-mark.png" alt="씨네꼼 상영실 예약" width={104} height={39} style={{ display: "block" }} />
               </a>
             </h1>
-            <AuthButton loggedIn={loggedIn} userName={userName} />
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 6, minWidth: 0 }}>
+              <a
+                href="/calendar"
+                className="authbtn"
+                style={{ display: "flex", flex: "none", alignItems: "center", gap: 5, minHeight: 36, boxSizing: "border-box", padding: "0 9px", borderRadius: "var(--r-sm)", border: "1px solid var(--line)", background: "var(--surface)", color: "var(--ink)", font: `600 var(--text-xs) var(--font-sans)`, textDecoration: "none", whiteSpace: "nowrap" }}
+              >
+                <HeaderCalendarIcon />
+                구독
+              </a>
+              <AuthButton loggedIn={loggedIn} userName={userName} />
+            </div>
           </div>
 
           {/* Arrows sit next to the date, not pinned to the card's edges. Pinned, they read as
@@ -831,6 +841,16 @@ function CalendarIcon() {
   );
 }
 
+/** Quiet header affordance for the external read-only calendar; the page explains app setup. */
+function HeaderCalendarIcon() {
+  return (
+    <svg width="13" height="14" viewBox="0 0 13 14" fill="none" aria-hidden style={{ flex: "none" }}>
+      <rect x="0.75" y="2.75" width="11.5" height="10.5" rx="2" stroke="var(--ink-faint)" strokeWidth="1.2" />
+      <path d="M3.5 0.75v3M9.5 0.75v3M0.75 6.25h11.5M6.5 8v3M5 9.5h3" stroke="var(--ink-faint)" strokeWidth="1.2" strokeLinecap="round" />
+    </svg>
+  );
+}
+
 /**
  * The date, doubling as the picker trigger.
  *
@@ -885,7 +905,7 @@ function DateField({ main, sub, value, dates, onPick, inputRef, onOpen }: { main
 function AuthButton({ loggedIn, userName }: { loggedIn: boolean; userName: string | null }) {
   if (loggedIn)
     return (
-      <button onClick={() => signOut()} className="authbtn" style={{ display: "flex", alignItems: "center", gap: 5, minHeight: 36, padding: "0 10px", borderRadius: "var(--r-sm)", border: "1px solid var(--line)", background: "var(--surface)", font: `600 var(--text-xs) var(--font-sans)`, cursor: "pointer", maxWidth: 160 }}>
+      <button onClick={() => signOut()} className="authbtn" style={{ display: "flex", minWidth: 0, alignItems: "center", gap: 5, minHeight: 36, padding: "0 10px", borderRadius: "var(--r-sm)", border: "1px solid var(--line)", background: "var(--surface)", font: `600 var(--text-xs) var(--font-sans)`, cursor: "pointer", maxWidth: 160 }}>
         {userName && (
           <>
             {/* The N frames it as "the Naver account you're signed in with" — all it can honestly

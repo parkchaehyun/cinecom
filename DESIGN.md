@@ -93,6 +93,12 @@ Two views behind the `오늘` / `이번주` pills (`aria-pressed` carries the st
 
 ## Interaction
 
+- **Calendar subscription** is a quiet outlined `구독` control beside auth in the header. It opens
+  a focused setup page rather than downloading a one-time snapshot: native apps receive a `webcal:`
+  handoff, while Google Calendar/Outlook users can copy the HTTPS feed URL. The page explicitly says
+  the subscription is read-only and updates on the external app's next poll. Feed events are
+  transparent to personal free/busy because a room booking does not mean every subscriber attends;
+  member nicknames are omitted so third-party calendar accounts receive no identity data.
 - **Tap-to-place**: the start time comes from the tapped Y position (snapped to 10 min), default 2h
   clamped to the next booking. Keyboard activation (`e.detail === 0`) has no pointer position, so it
   falls back to the gap start. This is why tapping an empty day doesn't force 09:00.

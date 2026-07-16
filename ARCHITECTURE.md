@@ -40,7 +40,7 @@ data never leaves Korea → no 국외 이전 to disclose in the privacy policy. 
 
 ---
 
-## 3. Data flow — three independent loops
+## 3. Data flow — four independent loops
 
 ```
 INGEST (every 10 min, pg_cron)
@@ -50,6 +50,9 @@ INGEST (every 10 min, pg_cron)
 BROWSE (no login)                                                         ▼
   Browser ──► app/page.tsx (server) ──► getSlots() ◄────────────── Supabase (posts, slots)
      BookingBoard renders the day/week timeline
+
+SUBSCRIBE (no login)
+  Calendar app ──► GET /calendar.ics ──► getSlots() ──► current read-only iCalendar feed
 
 POST (login required, only at the moment of booking)
   pick free slot ──► POST /api/post ──► [crawl 2 pages first, re-check clash] ──► Naver write API ──► shallow re-ingest
@@ -70,16 +73,20 @@ quarantined in `lib/naver.ts`.
 | `app/page.tsx` | Server component: loads slots + board list + session, renders `BookingBoard`. |
 | `app/layout.tsx` | Root layout, metadata, **OpenGraph** (share-card) tags. `metadataBase` is load-bearing. |
 | `app/privacy/page.tsx` | 개인정보처리방침 (개인정보보호법 제30조). Required for Naver review. |
+| `app/calendar/page.tsx` | Calendar subscription setup/help for native apps and URL-based services. |
+| `app/calendar.ics/route.ts` | Dynamic public iCalendar feed; generated from current slots on every poll. |
 | `app/api/ingest/route.ts` | Crawl+parse+persist. Guarded by `INGEST_SECRET`. Called by pg_cron. |
 | `app/api/post/route.ts` | Auth'd. Validates, re-checks freshness, writes to the cafe. The write path. |
 | `app/api/slots/route.ts` | Read API for parsed slots (JSON). |
 | `app/api/auth/[...nextauth]/route.ts` | Auth.js handler. |
 | `auth.ts` | Auth.js config: Naver provider, JWT + access-token refresh. |
-| `components/BookingBoard.tsx` | **The entire UI** (~980 lines): day grid, week view, reservation sheet, all state. |
+| `components/BookingBoard.tsx` | Main booking UI (~1000 lines): day grid, week view, reservation sheet, all state. |
+| `components/CalendarSubscription.tsx` | `webcal:` handoff + copyable HTTPS subscription URL. |
 | `lib/naver.ts` | Cafe read client, write client (`postArticle`), `fetchBoards`. **All the API quirks live here.** |
 | `lib/parser/parse.ts` | Title → structured reservation. Pattern-extraction, 99.55% on the 2-yr corpus. |
 | `lib/ingest.ts` | `runIngest` / `crawlAndParse` / `purgeExpired`. Retention + reconciliation logic. |
 | `lib/occupancy.ts` | `dayBlocks` (overnight clipping), `findClash` (cross-midnight overlap). |
+| `lib/calendar.ts` | Pure RFC 5545 feed serializer: stable UIDs, KST/overnight times, escaping + folding. |
 | `lib/slots.ts` | `getSlots` (DB → view models), `rowToSlot` (defensive end-time policy). |
 | `lib/title.ts` | Builds the canonical post title. Mirror of the sheet's live preview. |
 | `lib/dates.ts` | KST date helpers (server runs UTC — always convert). |
@@ -116,7 +123,7 @@ production, so deploys need nothing extra.
 ```bash
 npm install
 npm run dev        # http://localhost:3000
-npm test           # vitest, 38 tests
+npm test           # vitest unit suite (live ingest smoke test is opt-in)
 npm run typecheck  # tsc --noEmit
 npm run build      # production build
 ```
@@ -179,6 +186,13 @@ These are load-bearing. Each was a real bug; the comments in-code explain more.
 
 - **KST everywhere.** Server runs UTC. Always go through `lib/dates.ts`. Overnight bookings use
   minutes >1440 (25:30 = 01:30 next day), which is how the club writes them.
+
+- **Calendar UIDs must never use `slots.id`.** Ingest deletes and recreates parsed slot rows on
+  every pass, so those IDs churn every 10 minutes. The feed uses the stable cafe `article_id` plus
+  a deterministic per-post ordinal. The `.ics` response is generated from the DB at request time;
+  calendar apps choose when to poll it, so their refresh is not an instant push. Do not add member
+  nicknames to the feed: that would copy them into third-party calendar accounts for no scheduling
+  purpose; the source-post link is enough when someone needs the author.
 
 ---
 
