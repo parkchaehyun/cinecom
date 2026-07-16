@@ -1,36 +1,46 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# 씨네꼼 상영실 예약
 
-## Getting Started
+Room-availability + auto-posting web app for the 씨네꼼 university film club
+([cafe.naver.com/cinecom](https://cafe.naver.com/cinecom)). Crawls every reservation post in the
+club's Naver Cafe, shows a per-room timeline for the two screening rooms (대상영실 · 소상영실), and
+lets a member pick a free slot and post the booking back to the cafe under their own Naver account.
 
-First, run the development server:
+**Live:** https://cinecom.chaepark.com
+
+---
+
+## Start here
+
+Read these in order; each has one job, so you won't find the same thing twice.
+
+| Doc | Read it for |
+|---|---|
+| **[ARCHITECTURE.md](ARCHITECTURE.md)** | **Start here.** The whole system: data flow, file map, env vars, deploy, and the load-bearing invariants + gotchas that cost real debugging. |
+| [DESIGN.md](DESIGN.md) | The visual system — tokens, type, states, the mark. Read before touching UI. |
+| [CLAUDE.md](CLAUDE.md) | How to make changes here: think first, keep it simple, touch only what you must. |
+| [AGENTS.md](AGENTS.md) | One agent-specific gotcha about this Next.js version. |
+
+## Quickstart
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+npm install
+# put .env.local in place (transferred separately — never committed)
+npm run dev        # http://localhost:3000
+npm test           # vitest, 38 tests
+npm run typecheck
+npm run build
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+**Deploy is `git push` to `main`** — the repo is wired to Vercel's Git integration, which builds
+and ships in ~30s. No token, no CLI, no GitHub Actions needed. See ARCHITECTURE.md §6.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Stack
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+Next.js (App Router) · React · TypeScript · Tailwind v4 · Supabase Postgres · Auth.js (Naver) ·
+Vercel — everything runs in Seoul (`icn1` + `ap-northeast-2`). Details and the *why* in
+ARCHITECTURE.md.
 
-## Learn More
+## Status
 
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Live and fully open — Naver 검수 passed, so any club member can log in and post. No open tasks;
+next work is whatever real use surfaces. See ARCHITECTURE.md §10.

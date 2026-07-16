@@ -51,13 +51,16 @@ it has no Hangul and falls back to badly-spaced glyphs.
 
 ## Layout & states
 
-- Grid: `DAY_START` 09:00 → `DAY_END` 24:00 at `PXPM` 0.85 px/min; `y(min)` is the single mapping.
+- Grid: `DAY_START` 00:00 → `DAY_END` 24:00 at `PXPM` 0.85 px/min; `y(min)` is the single mapping.
+  Spans the whole day so overnight bookings (22:30–25:30) render in the right place.
 - Grid auto-anchors to one hour before the day's first booking (bookings are overwhelmingly evening;
-  opening at dead 09:00 space wasted the viewport).
+  otherwise the empty pre-dawn hours waste the viewport).
 - **Three slot states only**: `예약가능` / `예약됨` / `확인 필요`. A **cancelled booking is not drawn** —
   the slot is genuinely free again, so it renders as `예약가능` and is bookable. A struck-through
   "취소됨" block would occupy the grid and hide the one fact a booker needs.
-- Free slots are real `<button>`s: keyboard-reachable, and the label matches the legend.
+- Free slots are real `<button>`s: keyboard-reachable, with an `aria-label` announcing the open
+  range. The legend was **removed** — a filled block already names who booked it and a dashed empty
+  box is the only tappable thing on the grid, so it taught nothing for permanent vertical cost.
 
 ## The mark
 
@@ -77,10 +80,12 @@ through a CSS `mask` with `currentColor`.
 Two views behind the `오늘` / `이번주` pills (`aria-pressed` carries the state):
 
 - **Day** — the two-room grid above. `오늘` also jumps to today.
-- **Week** — 7 rows × 2 room tracks; bookings drawn as proportional segments across 09:00→24:00.
-  Three deliberate departures from the mock:
-  1. **Tracks carry a 12/18/24 scale + gridlines.** Density alone can't answer *"is Thursday **evening**
-     free?"* — and nearly every real booking is 19:00+, so a scale-less strip only says "busy / not busy".
+- **Week** — 7 rows × 2 room tracks; bookings drawn as proportional segments across 00:00→24:00.
+  The arrows step whole weeks and the header shows the week's date range (day view shows the single
+  date). Deliberate departures from the mock:
+  1. **Tracks carry a 6/12/18/24 scale + gridlines, on bounded rails.** Density alone can't answer
+     *"is Thursday **evening** free?"* — nearly every booking is 19:00+. The rails have a hairline
+     border: the fill (`--track`) alone was invisible against the card, so the two rooms merged.
   2. **Rows are buttons → tap jumps to that day's detail.** Overview without a path to detail is a
      dead end; the mock's rows were read-only.
   3. **Cancelled segments are omitted**, matching the day view. Drawing them would show phantom
@@ -95,10 +100,20 @@ Two views behind the `오늘` / `이번주` pills (`aria-pressed` carries the st
   `<input type="date">`, falling back to focus+click. Essential once real data spans arbitrary dates —
   stepping ‹ › to a date three weeks out is unusable.
 - Sheet is `position: fixed` — it **must not** live inside the card, whose `overflow: hidden` (rounded
-  corners) clipped it. Escape closes it; backdrop click closes it.
+  corners) clipped it. Escape, backdrop tap, or a downward drag on the handle all close it; there is
+  **no ✕** (four dismiss paths already, and it sat where the title should).
+- **Reservation sheet fields**: 시작/종료 (native time picker with a drawn clock affordance;
+  overnight ends read 25:00 under a `종료 · 익일` label), 길이 chips, 영화 제목 (**required** — an
+  empty title tells a browsing member nothing about a room held for free), 게시판 (board selector,
+  read live from the cafe menu — standing boards + the current-year 소모임s), 이름·소모임 (optional,
+  prefilled 수영모 only on 정기 영화 모임 where the club's own titles are unanimous). The live
+  preview mirrors the posted title exactly (`lib/title.ts`).
+- Native form controls get `-webkit-appearance: none` + a drawn glyph (clock, chevron): the platform
+  affordance differs across engines (Chrome draws one, iOS none), so we own it. Verify on a **real
+  phone** — headless Chrome can't show the iOS rendering.
 - Z-scale is semantic: `--z-backdrop` 40 → `--z-sheet` 50. No magic numbers.
 - Motion: `--dur` 200ms on `--ease-out-quart`. Global `prefers-reduced-motion` reset in `globals.css`.
-- Touch targets ≥44px (nav, sheet close).
+- Touch targets ≥44px (nav arrows, pills, duration chips).
 
 ## Known detector exceptions
 
@@ -117,7 +132,6 @@ Two views behind the `오늘` / `이번주` pills (`aria-pressed` carries the st
   brand-tinted lemon was the worst of both: too subtle to read as ours, still inside the detector's
   cream band (hue 40–100, low chroma). A true neutral cleared the flag but the decision was to keep the
   approved direction. Revisit alongside adding the logo.
-- Drag-to-select a range is a planned enhancement on top of tap-to-place (desktop-first; on touch it
-  fights scrolling).
-- The name field was removed from the sheet: titles are `날짜 / 방 / 시간 / 영화`, the majority shape.
-  `buildTitle` keeps optional-name support and the parser still reads names off existing posts.
+- Drag-to-select a range is a possible enhancement on top of tap-to-place (desktop-first; on touch
+  it fights scrolling). Horizontal-swipe day/week navigation was considered and declined — iOS
+  edge-swipe-back would eat it, and the grid already owns vertical scroll + tap.
