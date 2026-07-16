@@ -431,7 +431,9 @@ export default function BookingBoard({ slots, dates, today, initialIdx, loggedIn
             {/* Club mark: projector beam + cinecom wordmark, lifted off the logo's yellow block.
                 Identity, not chrome — small, black, and quiet above the controls. */}
             <h1 style={{ margin: 0 }}>
-              <img src="/cinecom-mark.png" alt="씨네꼼 상영실 예약" width={104} height={39} style={{ display: "block" }} />
+              <a href="https://cafe.naver.com/cinecom" target="_blank" rel="noopener noreferrer" style={{ display: "block" }}>
+                <img src="/cinecom-mark.png" alt="씨네꼼 상영실 예약" width={104} height={39} style={{ display: "block" }} />
+              </a>
             </h1>
             <AuthButton loggedIn={loggedIn} userName={userName} />
           </div>
