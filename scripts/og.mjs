@@ -9,27 +9,26 @@ import { readFileSync } from "fs";
 
 const mark = readFileSync("public/cinecom-mark.png").toString("base64");
 
+// The mark and three words, on the app's own background. No subtitle: every card renders
+// og:description as text directly beneath the image, so a line inside it only says the same thing
+// twice — at a size nobody reads in a chat thread. And no yellow bar: brand for its own sake,
+// competing with the one thing the card has to carry.
 const html = `<!doctype html><html lang="ko"><head><meta charset="utf-8">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable.min.css">
 <style>
   * { margin: 0; box-sizing: border-box; }
   body {
     width: 1200px; height: 630px; display: flex; flex-direction: column;
-    align-items: center; justify-content: center; gap: 34px;
+    align-items: center; justify-content: center; gap: 30px;
     background: #f0eee9;
     font-family: "Pretendard Variable", Pretendard, sans-serif;
-    /* The yellow only as a hairline of brand at the foot — a full yellow field would shout in a
-       chat feed and look nothing like the app it opens. */
-    border-bottom: 14px solid #eef700;
   }
   img { width: 460px; display: block; }
   h1 { font-size: 96px; font-weight: 700; letter-spacing: -0.03em; color: #1a1a1a; line-height: 1; }
-  p  { font-size: 34px; font-weight: 500; color: rgba(0,0,0,.62); letter-spacing: -0.01em; }
 </style></head>
 <body>
   <img src="data:image/png;base64,${mark}" alt="">
   <h1>상영실 예약</h1>
-  <p>대상영실 · 소상영실 예약 현황을 한눈에</p>
 </body></html>`;
 
 const b = await puppeteer.launch({
