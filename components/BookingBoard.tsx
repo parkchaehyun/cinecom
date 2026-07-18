@@ -425,21 +425,15 @@ export default function BookingBoard({ slots, dates, today, initialIdx, loggedIn
   const isWeek = view === "week";
 
   return (
-    /* One screen, no page scroll. The card is exactly the viewport minus its margin and the footer,
-       and the only thing that scrolls is the grid — so the date, the room headers and the view
-       switcher are always reachable without scrolling past them. Before this the page AND the grid
-       both scrolled: two nested scrollers, where a drag near the edge moved the wrong one. dvh (not
-       vh) because mobile Safari's vh assumes the URL bar is hidden and overshoots by ~60px.
-       The card is a full screen and the policy link sits BELOW the fold: minHeight (not height) on
-       the wrapper lets the page grow by exactly the footer, so 오늘/이번주 keep the bottom of the
-       screen — where a thumb reaches — and the link is found by scrolling, like any site's footer.
-       제30조 asks that the policy be 공개, not that it occupy a screen it never earns. */
-    <div style={{ minHeight: "100dvh", background: "var(--page)", display: "flex", flexDirection: "column", alignItems: "center", padding: "16px 12px", boxSizing: "border-box" }}>
+    /* One screen, no page scroll. The card and footer share the dynamic viewport, and the only
+       thing that scrolls is the grid — so the date, room headers, view switcher and policy link
+       remain reachable without introducing a second scroller. dvh (not vh) because mobile
+       Safari's vh assumes the URL bar is hidden and overshoots by ~60px. */
+    <div style={{ height: "100dvh", flex: "none", background: "var(--page)", display: "flex", flexDirection: "column", alignItems: "center", padding: "16px 12px", boxSizing: "border-box" }}>
       {/* inert while the sheet is open: aria-modal only *claims* the background is gone —
           this is what actually removes it from focus and the a11y tree. */}
-      {/* Exactly one screen minus its margin — the card can't shrink to make room for the footer,
-          which is the whole point: the footer goes below the fold instead. */}
-      <main ref={cardRef} inert={!!sheet} className="card" style={{ width: "100%", flex: "none", height: "calc(100dvh - 32px)", background: "var(--card)", border: "1px solid var(--line)", borderRadius: "var(--r-xl)", boxShadow: "var(--shadow-card)", overflow: "hidden", display: "flex", flexDirection: "column" }}>
+      {/* The card takes the space left after the footer; minHeight:0 lets its calendar shrink. */}
+      <main ref={cardRef} inert={!!sheet} className="card" style={{ width: "100%", flex: "1 1 0", minHeight: 0, background: "var(--card)", border: "1px solid var(--line)", borderRadius: "var(--r-xl)", boxShadow: "var(--shadow-card)", overflow: "hidden", display: "flex", flexDirection: "column" }}>
         <header style={{ padding: "12px 16px 10px", flex: "none" }}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, marginBottom: 8 }}>
             {/* Club mark: projector beam + cinecom wordmark, lifted off the logo's yellow block.
