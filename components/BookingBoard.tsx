@@ -108,6 +108,7 @@ export default function BookingBoard({ slots, dates, today, initialIdx, loggedIn
   const [local, setLocal] = useState<UISlot[]>(slots);
   const [dateIdx, setDateIdx] = useState(initialIdx);
   const [view, setView] = useState<"day" | "week">("day");
+  const [todayScrollRequest, setTodayScrollRequest] = useState(0);
   const [nowMin, setNowMin] = useState<number | null>(null);
   const [sheet, setSheet] = useState<Sheet | null>(null);
   const [busy, setBusy] = useState(false);
@@ -142,19 +143,26 @@ export default function BookingBoard({ slots, dates, today, initialIdx, loggedIn
     return () => window.clearInterval(interval);
   }, []);
 
-  // The grid spans the whole 24h for correctness, but 00:00-08:00 is nearly always empty
-  // (3 bookings in 232), so anchor on the day's first booking — or 09:00 on an empty day,
-  // which is where bookings actually start. Tails from an overnight booking count.
+  // Today opens around the current-time line. Other dates anchor on the first booking — or 09:00
+  // on an empty day — because 00:00-08:00 is nearly always empty (3 bookings in 232).
   useEffect(() => {
     if (view !== "day") return;
     const el = scrollRef.current;
     if (!el) return;
+
+    if (day.date === today) {
+      const target = y(minutesSinceMidnightKST()) - el.clientHeight / 2;
+      const maxScroll = Math.max(0, el.scrollHeight - el.clientHeight);
+      el.scrollTop = Math.max(0, Math.min(target, maxScroll));
+      return;
+    }
+
     const blocks = ROOMS.flatMap((r) => dayBlocks(day.date, r, local));
     const anchor = blocks.length ? Math.min(...blocks.map((b) => b.from)) - 60 : 9 * 60;
     el.scrollTop = Math.max(0, y(anchor) - PAD_TOP);
-    // Re-anchor on day/view change only, not on every local edit.
+    // Re-anchor on day/view change or an explicit Today request, not on every local edit.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [day.date, view]);
+  }, [day.date, view, todayScrollRequest]);
 
   /**
    * `aria-modal="true"` promises assistive tech that everything behind the sheet is
@@ -384,6 +392,7 @@ export default function BookingBoard({ slots, dates, today, initialIdx, loggedIn
   function goToday() {
     setView("day");
     setDateIdx(todayIdx >= 0 ? todayIdx : 0);
+    setTodayScrollRequest((request) => request + 1);
   }
 
   function goThisWeek() {
