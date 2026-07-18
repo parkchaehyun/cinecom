@@ -10,6 +10,12 @@ export function todayKST(): string {
   return new Date(Date.now() + KST_OFFSET_MS).toISOString().slice(0, 10);
 }
 
+/** Fractional minutes since midnight in KST, independent of the host timezone. */
+export function minutesSinceMidnightKST(now = new Date()): number {
+  const kst = new Date(now.getTime() + KST_OFFSET_MS);
+  return kst.getUTCHours() * 60 + kst.getUTCMinutes() + kst.getUTCSeconds() / 60;
+}
+
 const toUTC = (iso: string) => Date.parse(`${iso}T00:00:00Z`);
 const toISO = (ms: number) => new Date(ms).toISOString().slice(0, 10);
 

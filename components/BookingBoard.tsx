@@ -6,7 +6,7 @@ import { signIn, signOut } from "next-auth/react";
 import type { Board } from "@/lib/naver";
 import type { DayInfo, UISlot } from "@/lib/types";
 import { DEFAULT_MENU_ID } from "@/lib/naver";
-import { addDays, mondayOf } from "@/lib/dates";
+import { addDays, minutesSinceMidnightKST, mondayOf } from "@/lib/dates";
 import { dayBlocks, type DayBlock } from "@/lib/occupancy";
 
 const ROOMS = ["대상영실", "소상영실"] as const;
@@ -108,6 +108,7 @@ export default function BookingBoard({ slots, dates, today, initialIdx, loggedIn
   const [local, setLocal] = useState<UISlot[]>(slots);
   const [dateIdx, setDateIdx] = useState(initialIdx);
   const [view, setView] = useState<"day" | "week">("day");
+  const [nowMin, setNowMin] = useState<number | null>(null);
   const [sheet, setSheet] = useState<Sheet | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -132,6 +133,14 @@ export default function BookingBoard({ slots, dates, today, initialIdx, loggedIn
 
   // Adopt fresh server data after router.refresh() (e.g. once a new post is ingested).
   useEffect(() => setLocal(slots), [slots]);
+
+  // Start after hydration to keep the server HTML deterministic, then move the line once a minute.
+  useEffect(() => {
+    const update = () => setNowMin(minutesSinceMidnightKST());
+    update();
+    const interval = window.setInterval(update, 60_000);
+    return () => window.clearInterval(interval);
+  }, []);
 
   // The grid spans the whole 24h for correctness, but 00:00-08:00 is nearly always empty
   // (3 bookings in 232), so anchor on the day's first booking — or 09:00 on an empty day,
@@ -509,6 +518,16 @@ export default function BookingBoard({ slots, dates, today, initialIdx, loggedIn
                     )}
                   </div>
                 ))}
+                {day.date === today && nowMin !== null && (
+                  <div
+                    role="img"
+                    aria-label={`현재 시간 ${fmt(Math.floor(nowMin))}`}
+                    data-current-time
+                    style={{ position: "absolute", left: 44, right: 0, top: y(nowMin), height: 2, background: "var(--accent)", pointerEvents: "none" }}
+                  >
+                    <span aria-hidden style={{ position: "absolute", left: -4, top: "50%", width: 8, height: 8, borderRadius: "50%", background: "var(--accent)", transform: "translateY(-50%)" }} />
+                  </div>
+                )}
               </div>
             </div>
           </>
