@@ -377,6 +377,11 @@ export default function BookingBoard({ slots, dates, today, initialIdx, loggedIn
     setDateIdx(todayIdx >= 0 ? todayIdx : 0);
   }
 
+  function goThisWeek() {
+    setView("week");
+    setDateIdx(todayIdx >= 0 ? todayIdx : 0);
+  }
+
   // `dates` spans a month, so slice the Mon–Sun week containing the selected day for the week view.
   const weekDates = Array.from({ length: 7 }, (_, i) => addDays(mondayOf(day.date), i))
     .map((iso) => dates.find((d) => d.date === iso))
@@ -514,7 +519,7 @@ export default function BookingBoard({ slots, dates, today, initialIdx, loggedIn
         {/* View switcher */}
         <div style={{ display: "flex", gap: 8, padding: "12px 16px 14px", flex: "none" }}>
           <Pill label="오늘" active={view === "day"} onClick={goToday} />
-          <Pill label="이번주" active={view === "week"} onClick={() => setView("week")} />
+          <Pill label="이번주" active={view === "week"} onClick={goThisWeek} />
         </div>
       </main>
 
