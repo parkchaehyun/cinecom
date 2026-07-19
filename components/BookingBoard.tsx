@@ -8,6 +8,7 @@ import type { DayInfo, UISlot } from "@/lib/types";
 import { DEFAULT_MENU_ID } from "@/lib/naver";
 import { addDays, minutesSinceMidnightKST, mondayOf } from "@/lib/dates";
 import { dayBlocks, type DayBlock } from "@/lib/occupancy";
+import { cafeArticleAndroidIntentUrl, cafeArticleAppUrl, cafeArticleWebUrl } from "@/lib/cafe-link";
 
 const ROOMS = ["대상영실", "소상영실"] as const;
 // The full day: the club books overnight (22:30-25:30) and pre-dawn (01:00-04:00 마라톤),
@@ -448,7 +449,7 @@ export default function BookingBoard({ slots, dates, today, initialIdx, loggedIn
             {/* Club mark: projector beam + cinecom wordmark, lifted off the logo's yellow block.
                 Identity, not chrome — small, black, and quiet above the controls. */}
             <h1 style={{ margin: 0 }}>
-              <a href="https://cafe.naver.com/cinecom" target="_blank" rel="noopener noreferrer" style={{ display: "block" }}>
+              <a href="https://cafe.naver.com/cinecom" style={{ display: "block" }}>
                 <img src="/cinecom-mark.png" alt="씨네꼼 상영실 예약" width={104} height={39} style={{ display: "block" }} />
               </a>
             </h1>
@@ -810,9 +811,55 @@ function SlotBlock({ block }: { block: DayBlock }) {
   const review = slot.status === "needs_review";
   const r = "var(--r-sm)";
   const when = `${fmt(slot.startMin)}부터 ${slot.endAssumed ? "종료 시간 미상" : `${fmt(slot.endMin)}까지`}`;
+
+  function openCafeArticle(e: React.MouseEvent<HTMLAnchorElement>) {
+    // Mobile browsers do not report mouse fields consistently for touch-generated clicks.
+    // Modifier keys still mean the member explicitly asked for normal link behavior.
+    if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+
+    const ua = navigator.userAgent;
+    const android = /Android/i.test(ua);
+    const ios = /iPad|iPhone|iPod/.test(ua) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+    if (!android && !ios) return;
+
+    e.preventDefault();
+    if (android) {
+      window.location.href = cafeArticleAndroidIntentUrl(slot.articleId);
+      return;
+    }
+
+    // iOS has no Android-style intent fallback. If the app never hides this page, continue to
+    // the HTTPS article; if it does open, visibility/pagehide cancels the fallback.
+    const startedAt = Date.now();
+    let fallbackTimer = 0;
+    const cleanup = () => {
+      window.clearTimeout(fallbackTimer);
+      document.removeEventListener("visibilitychange", onVisibilityChange);
+      window.removeEventListener("blur", cleanup);
+      window.removeEventListener("pagehide", cleanup);
+    };
+    const onVisibilityChange = () => {
+      if (document.visibilityState === "hidden") cleanup();
+    };
+
+    document.addEventListener("visibilitychange", onVisibilityChange);
+    // Safari's native "Open in Naver Cafe?" prompt can appear before the document becomes hidden.
+    // Blur fires at that handoff boundary, so the delayed web fallback cannot race an accepted open.
+    window.addEventListener("blur", cleanup, { once: true });
+    window.addEventListener("pagehide", cleanup, { once: true });
+    fallbackTimer = window.setTimeout(() => {
+      cleanup();
+      if (document.visibilityState === "visible" && Date.now() - startedAt < 4000) {
+        window.location.href = cafeArticleWebUrl(slot.articleId);
+      }
+    }, 3000);
+    window.location.href = cafeArticleAppUrl(slot.articleId);
+  }
+
   return (
     <a
-      href={`https://cafe.naver.com/cinecom/${slot.articleId}`}
+      href={cafeArticleWebUrl(slot.articleId)}
+      onClick={openCafeArticle}
       target="_blank"
       rel="noopener noreferrer"
       className="slot-link"
