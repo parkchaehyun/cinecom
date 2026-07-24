@@ -1,13 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { cafeArticleAndroidIntentUrl, cafeArticleAppUrl, cafeArticleWebUrl } from "./cafe-link";
+import { cafeArticleAndroidIntentUrl, cafeArticleWebUrl } from "./cafe-link";
 
 describe("Naver Cafe article links", () => {
   it("keeps a normal HTTPS article URL as the permanent fallback", () => {
     expect(cafeArticleWebUrl(12345)).toBe("https://cafe.naver.com/cinecom/12345");
-  });
-
-  it("targets the article in the Cafe app", () => {
-    expect(cafeArticleAppUrl(12345)).toBe("navercafe://cafe/26859626/12345");
   });
 
   it("gives Android the Cafe package and an encoded web fallback", () => {

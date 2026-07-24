@@ -8,7 +8,7 @@ import type { DayInfo, UISlot } from "@/lib/types";
 import { DEFAULT_MENU_ID } from "@/lib/naver";
 import { addDays, minutesSinceMidnightKST, mondayOf } from "@/lib/dates";
 import { dayBlocks, type DayBlock } from "@/lib/occupancy";
-import { cafeArticleAndroidIntentUrl, cafeArticleAppUrl, cafeArticleWebUrl } from "@/lib/cafe-link";
+import { cafeArticleAndroidIntentUrl, cafeArticleWebUrl } from "@/lib/cafe-link";
 
 const ROOMS = ["대상영실", "소상영실"] as const;
 // The full day: the club books overnight (22:30-25:30) and pre-dawn (01:00-04:00 마라톤),
@@ -817,43 +817,13 @@ function SlotBlock({ block }: { block: DayBlock }) {
     // Modifier keys still mean the member explicitly asked for normal link behavior.
     if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
 
-    const ua = navigator.userAgent;
-    const android = /Android/i.test(ua);
-    const ios = /iPad|iPhone|iPod/.test(ua) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
-    if (!android && !ios) return;
+    const android = /Android/i.test(navigator.userAgent);
+    // iOS follows the HTTPS href; Naver's mobile page owns its app handoff without Safari
+    // attempting an unregistered custom scheme when the Cafe app is absent.
+    if (!android) return;
 
     e.preventDefault();
-    if (android) {
-      window.location.href = cafeArticleAndroidIntentUrl(slot.articleId);
-      return;
-    }
-
-    // iOS has no Android-style intent fallback. If the app never hides this page, continue to
-    // the HTTPS article; if it does open, visibility/pagehide cancels the fallback.
-    const startedAt = Date.now();
-    let fallbackTimer = 0;
-    const cleanup = () => {
-      window.clearTimeout(fallbackTimer);
-      document.removeEventListener("visibilitychange", onVisibilityChange);
-      window.removeEventListener("blur", cleanup);
-      window.removeEventListener("pagehide", cleanup);
-    };
-    const onVisibilityChange = () => {
-      if (document.visibilityState === "hidden") cleanup();
-    };
-
-    document.addEventListener("visibilitychange", onVisibilityChange);
-    // Safari's native "Open in Naver Cafe?" prompt can appear before the document becomes hidden.
-    // Blur fires at that handoff boundary, so the delayed web fallback cannot race an accepted open.
-    window.addEventListener("blur", cleanup, { once: true });
-    window.addEventListener("pagehide", cleanup, { once: true });
-    fallbackTimer = window.setTimeout(() => {
-      cleanup();
-      if (document.visibilityState === "visible" && Date.now() - startedAt < 4000) {
-        window.location.href = cafeArticleWebUrl(slot.articleId);
-      }
-    }, 3000);
-    window.location.href = cafeArticleAppUrl(slot.articleId);
+    window.location.href = cafeArticleAndroidIntentUrl(slot.articleId);
   }
 
   return (
