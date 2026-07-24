@@ -5,7 +5,7 @@ Room-availability + auto-posting web app for the 씨네꼼 university film club
 club's Naver Cafe, shows a per-room timeline for the two screening rooms (대상영실 · 소상영실), and
 lets a member pick a free slot and post the booking back to the cafe under their own Naver account.
 
-**Live:** https://cinecom.chaepark.com
+**Live:** https://cinecom.club
 
 ---
 
