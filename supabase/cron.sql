@@ -28,7 +28,7 @@ select cron.schedule(
   '*/10 * * * *',
   $$
   select net.http_post(
-    url     := 'https://cinecom.chaepark.com/api/ingest',
+    url     := 'https://cinecom.club/api/ingest',
     headers := jsonb_build_object(
       'Content-Type', 'application/json',
       'x-ingest-secret', (select decrypted_secret from vault.decrypted_secrets where name = 'cinecom_ingest_secret')
