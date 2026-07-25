@@ -10,7 +10,7 @@ const DESC = "대상영실·소상영실 예약 현황을 한눈에";
 export const metadata: Metadata = {
   // metadataBase is what turns app/opengraph-image.png into the absolute URL scrapers require —
   // without it Next emits a relative path and KakaoTalk, Slack and X all show the link bare.
-  metadataBase: new URL("https://cinecom.chaepark.com"),
+  metadataBase: new URL("https://cinecom.club"),
   title: TITLE,
   description: DESC,
   // The link gets shared into KakaoTalk far more than it gets typed. og:image is picked up

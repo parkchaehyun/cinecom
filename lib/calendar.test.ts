@@ -24,9 +24,11 @@ describe("buildCalendar", () => {
     const calendar = unfold(buildCalendar([slot()], generatedAt));
 
     expect(calendar).toContain("METHOD:PUBLISH\r\n");
+    expect(CALENDAR_URL).toBe("https://cinecom.club/calendar.ics");
     expect(calendar).toContain(`SOURCE;VALUE=URI:${CALENDAR_URL}\r\n`);
+    expect(calendar).toContain("URL:https://cinecom.club\r\n");
     expect(calendar).toContain("REFRESH-INTERVAL;VALUE=DURATION:PT10M\r\n");
-    expect(calendar).toContain("UID:8115-1@cinecom.chaepark.com\r\n");
+    expect(calendar).toContain("UID:8115-1@cinecom.club\r\n");
     expect(calendar).toContain("DTSTAMP:20260716T030405Z\r\n");
     expect(calendar).toContain(`SEQUENCE:${Math.floor(generatedAt.getTime() / 60_000)}\r\n`);
     expect(calendar).toContain("ORGANIZER:mailto:cinecom@chaepark.com\r\n");
@@ -57,8 +59,8 @@ describe("buildCalendar", () => {
     const canceled = slot({ articleId: 100, status: "canceled" });
     const calendar = unfold(buildCalendar([later, canceled, earlier], generatedAt));
 
-    const first = calendar.indexOf("UID:99-1@cinecom.chaepark.com");
-    const second = calendar.indexOf("UID:99-2@cinecom.chaepark.com");
+    const first = calendar.indexOf("UID:99-1@cinecom.club");
+    const second = calendar.indexOf("UID:99-2@cinecom.club");
     expect(first).toBeGreaterThan(-1);
     expect(second).toBeGreaterThan(first);
     expect(calendar).not.toContain("UID:100-");

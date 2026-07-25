@@ -1,9 +1,10 @@
 import { addDays } from "./dates";
 import type { UISlot } from "./types";
 
-export const CALENDAR_URL = "https://cinecom.chaepark.com/calendar.ics";
-
-const SITE_URL = "https://cinecom.chaepark.com";
+const SITE_URL = "https://cinecom.club";
+export const CALENDAR_URL = `${SITE_URL}/calendar.ics`;
+// This namespace is part of each event's persistent identity; do not change it once subscribers exist.
+const UID_DOMAIN = "cinecom.club";
 const CALENDAR_NAME = "씨네꼼 상영실 예약";
 const encoder = new TextEncoder();
 
@@ -131,7 +132,7 @@ export function buildCalendar(slots: UISlot[], generatedAt = new Date()): string
 
     lines.push(
       "BEGIN:VEVENT",
-      `UID:${slot.articleId}-${ordinal}@cinecom.chaepark.com`,
+      `UID:${slot.articleId}-${ordinal}@${UID_DOMAIN}`,
       `DTSTAMP:${stamp}`,
       `LAST-MODIFIED:${stamp}`,
       `SEQUENCE:${sequence}`,

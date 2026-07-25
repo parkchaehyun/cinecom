@@ -5,7 +5,7 @@ code; it front-loads the non-obvious invariants and the hard-won facts, so you d
 them the expensive way. Design system lives in [DESIGN.md](DESIGN.md); coding-behavior guidance in
 [CLAUDE.md](CLAUDE.md) / [AGENTS.md](AGENTS.md).
 
-**Live:** https://cinecom.chaepark.com
+**Live:** https://cinecom.club
 
 ---
 
@@ -189,10 +189,12 @@ These are load-bearing. Each was a real bug; the comments in-code explain more.
 
 - **Calendar UIDs must never use `slots.id`.** Ingest deletes and recreates parsed slot rows on
   every pass, so those IDs churn every 10 minutes. The feed uses the stable cafe `article_id` plus
-  a deterministic per-post ordinal. The `.ics` response is generated from the DB at request time;
-  calendar apps choose when to poll it, so their refresh is not an instant push. Do not add member
-  nicknames to the feed: that would copy them into third-party calendar accounts for no scheduling
-  purpose; the source-post link is enough when someone needs the author.
+  a deterministic per-post ordinal and the canonical `@cinecom.club` namespace. Once subscribers
+  exist, those UID values are immutable: changing them would make clients replace every existing
+  event. The `.ics` response is generated from the DB at request time; calendar apps choose when to
+  poll it, so their refresh is not an instant push. Do not add member nicknames to the feed: that
+  would copy them into third-party calendar accounts for no scheduling purpose; the source-post
+  link is enough when someone needs the author.
 
 ---
 
