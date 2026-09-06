@@ -33,3 +33,13 @@ create table if not exists slots (
 create index if not exists slots_date_room_idx on slots (date, room);
 create index if not exists slots_article_idx on slots (article_id);
 create index if not exists posts_write_ts_idx on posts (write_ts desc);
+
+-- App-originated reservations for adoption & usage analytics (zero PII, kept across retention purges).
+create table if not exists app_reservations (
+  article_id  bigint primary key,
+  created_at  timestamptz not null default now(),
+  room        text        not null,
+  date        date        not null
+);
+
+create index if not exists app_reservations_created_at_idx on app_reservations (created_at desc);

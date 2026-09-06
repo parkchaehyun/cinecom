@@ -6,6 +6,7 @@ import { addDays } from "@/lib/dates";
 import { buildTitle } from "@/lib/title";
 import { CafeScopeError, DEFAULT_MENU_ID, fetchBoards, postArticle } from "@/lib/naver";
 import { runIngest } from "@/lib/ingest";
+import { supabaseAdmin } from "@/lib/supabase";
 import { ROOMS } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
@@ -88,13 +89,15 @@ export async function POST(req: Request) {
   const subject = buildTitle({ date, room, startMin, endMin, movie: b.movie, person: b.person });
   const content = b.body?.trim() || "."; // members really do post a bare "."
 
+  let articleId: number | undefined;
   try {
-    await postArticle({
+    const postResult = await postArticle({
       accessToken: session.accessToken,
       subject,
       content,
       menuId,
     });
+    articleId = postResult.articleId;
   } catch (e) {
     // Declined 카페 permission at login — recoverable, and the client knows how: re-consent.
     if (e instanceof CafeScopeError) {
@@ -115,6 +118,22 @@ export async function POST(req: Request) {
     );
   }
 
+  // Record that this reservation was made through the app for usage analytics.
+  // Zero PII (article_id, room, date) — kept indefinitely across 90-day retention purges.
+  // Never fail the user response if this telemetry insert fails.
+  if (articleId) {
+    try {
+      const supa = supabaseAdmin();
+      await supa.from("app_reservations").insert({
+        article_id: articleId,
+        room,
+        date,
+      });
+    } catch (err) {
+      console.error("app_reservations insert failed:", err);
+    }
+  }
+
   // The board reads the DB, not the cafe, so without this the member's own booking
   // wouldn't appear until the next cron. Shallow pass (newest pages, no reconcile).
   // Never fail the response over this — the post itself already succeeded.
@@ -125,5 +144,5 @@ export async function POST(req: Request) {
   } catch {
     /* the scheduled ingest will pick it up */
   }
-  return NextResponse.json({ ok: true, subject, ingested });
+  return NextResponse.json({ ok: true, subject, ingested, articleId });
 }

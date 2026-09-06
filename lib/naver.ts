@@ -161,14 +161,19 @@ export interface PostArticleInput {
   openToAll?: boolean;
 }
 
-/** Create a cafe post as the token's owner. Returns Naver's raw response. */
+export interface PostArticleResult {
+  articleId?: number;
+  raw?: unknown;
+}
+
+/** Create a cafe post as the token's owner. Returns created articleId and Naver's raw response. */
 export async function postArticle({
   accessToken,
   subject,
   content,
   menuId = DEFAULT_MENU_ID,
   openToAll = true,
-}: PostArticleInput): Promise<unknown> {
+}: PostArticleInput): Promise<PostArticleResult> {
   // Hand-built: URLSearchParams would encode once. See doubleEncode.
   const body = [
     `subject=${doubleEncode(subject)}`,
@@ -194,7 +199,19 @@ export async function postArticle({
     if (res.status === 401 && code === "024") throw new CafeScopeError();
     throw new Error(`cafe write HTTP ${res.status}: ${JSON.stringify(json)}`);
   }
-  return json;
+
+  const payload = json as
+    | {
+        message?: { result?: { articleId?: number | string; articleUrl?: string } };
+        result?: { articleId?: number | string; articleUrl?: string };
+      }
+    | null;
+  const rawId = payload?.message?.result?.articleId ?? payload?.result?.articleId;
+  const rawUrl = payload?.message?.result?.articleUrl ?? payload?.result?.articleUrl;
+  const parsedFromUrl = rawUrl?.match(/\/(\d+)(?:\?|$)/)?.[1];
+  const articleId = rawId ? Number(rawId) : parsedFromUrl ? Number(parsedFromUrl) : undefined;
+
+  return { articleId: Number.isFinite(articleId) ? articleId : undefined, raw: json };
 }
 
 /**

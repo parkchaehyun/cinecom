@@ -28,4 +28,14 @@ describe("postArticle — declining 카페 at login", () => {
     reply(200, { message: { status: "200" } });
     await expect(postArticle({ accessToken: "t", subject: "s", content: "." })).resolves.toBeTruthy();
   });
+
+  it("extracts articleId from message.result or direct result", async () => {
+    reply(200, { message: { status: "200", result: { articleId: 8368 } } });
+    const res1 = await postArticle({ accessToken: "t", subject: "s", content: "." });
+    expect(res1.articleId).toBe(8368);
+
+    reply(200, { message: { status: "200", result: { articleUrl: "https://cafe.naver.com/cinecom/8369" } } });
+    const res2 = await postArticle({ accessToken: "t", subject: "s", content: "." });
+    expect(res2.articleId).toBe(8369);
+  });
 });
