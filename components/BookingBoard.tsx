@@ -453,6 +453,7 @@ export default function BookingBoard({ slots, dates, today, initialIdx, loggedIn
                 <img src="/cinecom-mark.png" alt="씨네꼼 상영실 예약" width={104} height={39} style={{ display: "block" }} />
               </a>
             </h1>
+            <p className="sr-only">서울대 영화공동체 씨네꼼 상영실 예약 현황 조회 · 예약글 작성</p>
             <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 6, minWidth: 0 }}>
               <a
                 href="/calendar"
@@ -493,7 +494,7 @@ export default function BookingBoard({ slots, dates, today, initialIdx, loggedIn
             {/* flex:1 + minHeight:0 — the grid takes whatever height is left and scrolls inside it.
                 minHeight:0 is load-bearing: a flex item won't shrink below its content by default,
                 so without it the 1236px grid would push the card past the viewport. */}
-            <div ref={scrollRef} style={{ flex: 1, minHeight: 0, overflowY: "auto", background: "var(--surface)", margin: "0 12px", borderRadius: "0 0 var(--r-md) var(--r-md)" }}>
+            <div ref={scrollRef} data-nosnippet style={{ flex: 1, minHeight: 0, overflowY: "auto", background: "var(--surface)", margin: "0 12px", borderRadius: "0 0 var(--r-md) var(--r-md)" }}>
               <div style={{ display: "flex", position: "relative", height: GRID_H }}>
                 <div style={{ width: 44, flex: "none", position: "relative" }}>
                   {hourTicks().map((t) => (
@@ -756,7 +757,7 @@ export default function BookingBoard({ slots, dates, today, initialIdx, loggedIn
    a 12/18/24 scale. Rows are buttons: overview → tap → that day's detail. */
 function WeekView({ dates, slots, todayDate, onPickDate }: { dates: DayInfo[]; slots: UISlot[]; todayDate: string; onPickDate: (iso: string) => void }) {
   return (
-    <div style={{ flex: 1, minHeight: 0, overflowY: "auto", padding: "4px 16px 8px" }}>
+    <div data-nosnippet style={{ flex: 1, minHeight: 0, overflowY: "auto", padding: "4px 16px 8px" }}>
       <div style={{ display: "flex", gap: 8, paddingLeft: 60, marginBottom: 6 }}>
         {ROOMS.map((room) => (
           <div key={room} style={{ flex: 1 }}>
